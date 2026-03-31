@@ -36,6 +36,7 @@ const INITIAL_ROOMS = [
   { id: 'r4', matchName: 'http://fgam.org.au/zoom2', displayName: 'Zoom 2', category: 'Kids', capacity: 80 },
   { id: 'r5', matchName: 'http://fgam.org.au/zoom3', displayName: 'Zoom 3', category: 'General', capacity: 60 },
   { id: 'r6', matchName: 'http://fgam.org.au/zoom4', displayName: 'Zoom 4', category: 'Tech', capacity: 8 },
+  { id: 'r7', matchName: 'FGAM Multipurpose Room - 38 Lexton Rd, Box Hill North, VIC 3129', displayName: 'Multipurpose Room', category: 'Tech', capacity: 8 },
 ];
 
 const App = () => {
