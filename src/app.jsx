@@ -23,8 +23,8 @@ import {
 /**
  * PCO ROOM AVAILABILITY DASHBOARD
  * Updates:
- * 1. Localized Time Navigation: Moved Shift Time controls into the grid header.
- * 2. Header Cleanup: Simplified the top header to focus on branding and date.
+ * 1. Fixed "NOW" Indicator: Improved centering and visibility to prevent clipping.
+ * 2. Localized Time Navigation: Integrated controls into the grid header.
  * 3. FGAM Room Mapping: Preserved specific technical match names.
  */
 
@@ -348,9 +348,15 @@ const App = () => {
                   </div>
 
                   <div className="flex-1 relative overflow-hidden bg-white">
+                    {/* Centered Now Indicator */}
                     {nowPos !== null && (
-                      <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 shadow-[0_0_10px_rgba(239,68,68,0.5)]" style={{ left: `${nowPos}%` }}>
-                        <div className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm mt-2 ml-[-50%] uppercase tracking-tighter shadow-sm">NOW</div>
+                      <div 
+                        className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 shadow-[0_0_10px_rgba(239,68,68,0.5)] flex flex-col items-center pointer-events-none" 
+                        style={{ left: `${nowPos}%` }}
+                      >
+                        <div className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm mt-2 whitespace-nowrap uppercase tracking-tighter shadow-sm transform -translate-x-1/2">
+                          NOW
+                        </div>
                       </div>
                     )}
 
