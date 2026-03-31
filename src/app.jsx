@@ -13,27 +13,37 @@ import {
   Bug,
   ChevronDown,
   Info,
-  X
+  X,
+  Settings,
+  Check
 } from 'lucide-react';
 
 /**
  * PCO ROOM AVAILABILITY DASHBOARD
- * Fixed the "Unexpected end of file" error and improved robustness.
+ * Features:
+ * 1. Alias Matching: Match technical PCO names to friendly Display Names.
+ * 2. Room Selector: Toggle visibility for a cleaner dashboard.
+ * 3. Triple-Redundancy Fetch: Bypass CORS issues.
  */
 
+// --- ROOM CONFIGURATION ---
+// matchName: The EXACT text discovered in your PCO feed (use the Bug icon to find these).
+// displayName: The friendly name you want displayed on the dashboard.
 const INITIAL_ROOMS = [
-  { id: 'r1', name: 'Main Sanctuary', category: 'Worship', capacity: 450 },
-  { id: 'r2', name: 'Youth Center', category: 'Youth', capacity: 120 },
-  { id: 'r3', name: 'Conference Room A', category: 'Admin', capacity: 15 },
-  { id: 'r4', name: 'Kids Theater', category: 'Kids', capacity: 80 },
-  { id: 'r5', name: 'Cafe Lobby', category: 'General', capacity: 60 },
-  { id: 'r6', name: 'Production Suite', category: 'Tech', capacity: 8 },
+  { id: 'r1', matchName: 'Main Sanctuary', displayName: 'Sanctuary', category: 'Worship', capacity: 450 },
+  { id: 'r2', matchName: 'Youth Center (Room 201)', displayName: 'Youth Hub', category: 'Youth', capacity: 120 },
+  { id: 'r3', matchName: 'Admin Conference A', displayName: 'Conf Room A', category: 'Admin', capacity: 15 },
+  { id: 'r4', matchName: 'Kids Theater Area', displayName: 'Kids Theater', category: 'Kids', capacity: 80 },
+  { id: 'r5', matchName: 'Main Lobby / Cafe', displayName: 'Cafe', category: 'General', capacity: 60 },
+  { id: 'r6', matchName: 'Prod Suite 1', displayName: 'Production', category: 'Tech', capacity: 8 },
 ];
 
 const App = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedRoomIds, setSelectedRoomIds] = useState(INITIAL_ROOMS.map(r => r.id));
+  const [isRoomSelectorOpen, setIsRoomSelectorOpen] = useState(false);
   const [icsUrl, setIcsUrl] = useState('webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2Q-J8pkxZVanF9QAhIozWROnGdixZbtqcSRmJPDZsXmGmLFXlbiqcQH5MaXZOamFrNZc4ZYcRckFiXmFgP1sBcnZrIByRQwmZfJBgBf8xjw938709825ac6df76089393a1f8c561d56705a7e4');
   const [bookings, setBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -93,13 +103,16 @@ const App = () => {
   };
 
   const processCalendarData = useCallback((rawData) => {
+    if (!rawData || !rawData.includes("BEGIN:VCALENDAR")) return false;
+
     const parsedEvents = parseICS(rawData);
     setDiscoveredLocations([...new Set(parsedEvents.map(e => e.location))]);
 
     const mappedBookings = parsedEvents.map((event, idx) => {
+      // Logic: Match the 'location' from the feed to our 'matchName' configuration
       const room = INITIAL_ROOMS.find(r => 
-        event.location.toLowerCase().includes(r.name.toLowerCase()) || 
-        r.name.toLowerCase().includes(event.location.toLowerCase())
+        event.location.toLowerCase().includes(r.matchName.toLowerCase()) || 
+        r.matchName.toLowerCase().includes(event.location.toLowerCase())
       );
       
       return {
@@ -113,57 +126,60 @@ const App = () => {
     });
 
     setBookings(mappedBookings);
-    setIsLoading(false);
+    return true;
   }, []);
 
   const fetchCalendar = useCallback(async () => {
     if (!icsUrl) return;
     setIsLoading(true);
     setError(null);
-
     const cleanUrl = icsUrl.replace('webcal://', 'https://').trim();
 
-    // Strategy 1: Local / Vercel API
+    // Try API Middleman then Proxies
     try {
       const response = await fetch(`/api/calendar?url=${encodeURIComponent(cleanUrl)}`);
-      if (response.ok) {
-        const data = await response.text();
-        if (data.includes("BEGIN:VCALENDAR")) {
-          processCalendarData(data);
-          return;
-        }
+      if (response.ok && processCalendarData(await response.text())) {
+        setIsLoading(false);
+        return;
       }
-    } catch (e) {
-      console.warn("Local API fetch failed.");
-    }
+    } catch (e) {}
 
-    // Strategy 2: Proxy Fallback
     try {
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(cleanUrl)}&timestamp=${Date.now()}`;
-      const response = await fetch(proxyUrl);
-      if (response.ok) {
-        const json = await response.json();
-        if (json.contents && json.contents.includes("BEGIN:VCALENDAR")) {
-          processCalendarData(json.contents);
-          return;
-        }
+      const response = await fetch(`https://corsproxy.io/?${encodeURIComponent(cleanUrl)}`);
+      if (response.ok && processCalendarData(await response.text())) {
+        setIsLoading(false);
+        return;
       }
-    } catch (e) {
-      console.error("All fetch strategies failed.");
-      setError("Failed to fetch calendar data. Check CORS settings or PCO link.");
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (e) {}
+
+    try {
+      const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(cleanUrl)}&timestamp=${Date.now()}`);
+      const json = await response.json();
+      if (json.contents && processCalendarData(json.contents)) {
+        setIsLoading(false);
+        return;
+      }
+    } catch (e) {}
+
+    setError("Failed to fetch calendar data.");
+    setIsLoading(false);
   }, [icsUrl, processCalendarData]);
 
   useEffect(() => {
     fetchCalendar();
   }, [fetchCalendar]);
 
+  const toggleRoomVisibility = (roomId) => {
+    setSelectedRoomIds(prev => 
+      prev.includes(roomId) ? prev.filter(id => id !== roomId) : [...prev, roomId]
+    );
+  };
+
   const filteredRooms = INITIAL_ROOMS.filter(room => {
-    const matchesSearch = room.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = room.displayName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || room.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    const isVisible = selectedRoomIds.includes(room.id);
+    return matchesSearch && matchesCategory && isVisible;
   });
 
   const changeDate = (days) => {
@@ -189,8 +205,8 @@ const App = () => {
             <h1 className="text-xl font-extrabold tracking-tight text-slate-800">Resource Planner</h1>
             <div className="flex items-center gap-2 mt-0.5">
               <div className={`h-2 w-2 rounded-full ${bookings.length > 0 ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`}></div>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1">
-                {bookings.length} Events | {bookings.filter(b => b.roomId).length} Mapped
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                {bookings.filter(b => b.roomId).length} Active Assignments
               </p>
             </div>
           </div>
@@ -205,16 +221,12 @@ const App = () => {
         </div>
 
         <div className="hidden lg:flex items-center gap-2 border-l border-slate-200 pl-4">
-          <div className="relative">
-            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-            <input 
-              type="text" 
-              placeholder="ICS Link..." 
-              className="pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs w-48 focus:w-80 transition-all outline-none"
-              value={icsUrl}
-              onChange={(e) => setIcsUrl(e.target.value)}
-            />
-          </div>
+          <button 
+            onClick={() => setIsRoomSelectorOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-all border border-slate-200"
+          >
+            <Settings size={14} /> Filter View
+          </button>
           <button onClick={fetchCalendar} disabled={isLoading} className={`p-2 rounded-lg ${isLoading ? 'animate-spin text-indigo-500' : 'text-slate-400 hover:text-indigo-600'}`}>
             <RefreshCw size={18} />
           </button>
@@ -233,7 +245,7 @@ const App = () => {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
               type="text" 
-              placeholder="Search rooms..." 
+              placeholder="Search by display name..." 
               className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm font-medium focus:ring-2 focus:ring-indigo-100"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -258,104 +270,127 @@ const App = () => {
         </div>
 
         <div className="flex-1 overflow-auto bg-slate-200/40 relative">
-          <div className="min-w-max p-8">
-            <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
-              <div className="flex">
-                <div className="w-72 shrink-0 bg-slate-50/50 border-r border-slate-200">
-                  <div className="h-16 border-b border-slate-200 flex items-center px-6 bg-slate-100/50 uppercase tracking-widest text-[10px] font-black text-slate-400">Resources</div>
-                  {filteredRooms.map(room => (
-                    <div key={room.id} className="h-28 border-b border-slate-100 px-6 flex flex-col justify-center">
-                      <span className="font-extrabold text-slate-800 text-base">{room.name}</span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-bold bg-white border px-2 py-0.5 rounded-lg text-slate-500 uppercase">{room.category}</span>
-                        <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><Users size={12}/> {room.capacity}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex-1 relative">
-                  <div className="flex h-16 border-b border-slate-200">
-                    {hours.map(hour => (
-                      <div key={hour} className="w-40 shrink-0 border-r border-slate-100 flex items-center justify-center bg-slate-50/30">
-                        <span className="text-xs font-black text-slate-400 uppercase tracking-tighter">
-                          {hour > 12 ? `${hour-12} PM` : hour === 12 ? '12 PM' : `${hour} AM`}
-                        </span>
+          {filteredRooms.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-slate-400">
+              <Settings size={48} className="mb-4 opacity-20" />
+              <p className="font-bold text-sm uppercase tracking-widest">View is empty</p>
+              <button onClick={() => setIsRoomSelectorOpen(true)} className="mt-4 text-indigo-600 text-xs font-bold hover:underline">Adjust visibility settings</button>
+            </div>
+          ) : (
+            <div className="min-w-max p-8">
+              <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+                <div className="flex">
+                  <div className="w-72 shrink-0 bg-slate-50/50 border-r border-slate-200">
+                    <div className="h-16 border-b border-slate-200 flex items-center px-6 bg-slate-100/50 uppercase tracking-widest text-[10px] font-black text-slate-400">Room Status</div>
+                    {filteredRooms.map(room => (
+                      <div key={room.id} className="h-28 border-b border-slate-100 px-6 flex flex-col justify-center">
+                        <span className="font-extrabold text-slate-800 text-base">{room.displayName}</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[10px] font-bold bg-white border px-2 py-0.5 rounded-lg text-slate-500 uppercase">{room.category}</span>
+                          <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><Users size={12}/> {room.capacity}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
 
-                  {filteredRooms.map(room => (
-                    <div key={room.id} className="flex h-28 border-b border-slate-100 relative group">
-                      {hours.map(h => <div key={h} className="w-40 shrink-0 border-r border-slate-50/50 group-hover:bg-slate-50/50 transition-colors"></div>)}
-                      {bookings
-                        .filter(b => b.roomId === room.id && isSelectedDate(b.start))
-                        .map(b => {
-                          const startObj = new Date(b.start);
-                          const endObj = new Date(b.end);
-                          const start = startObj.getHours() + (startObj.getMinutes() / 60);
-                          const end = endObj.getHours() + (endObj.getMinutes() / 60);
-                          const leftOffset = (start - 7) * 160;
-                          const width = Math.max((end - start) * 160, 40);
-
-                          return (
-                            <div 
-                              key={b.id} 
-                              className="absolute top-4 h-20 rounded-2xl border-l-4 border-l-indigo-500 bg-white shadow-xl p-4 overflow-hidden border border-slate-100 z-10 hover:-translate-y-1 transition-all cursor-default" 
-                              style={{ left: `${leftOffset + 8}px`, width: `${width - 16}px` }}
-                            >
-                              <div className="font-extrabold text-xs text-slate-800 truncate mb-1">{b.title}</div>
-                              <div className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5">
-                                <Clock size={12} className="text-indigo-400" /> 
-                                {startObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                              </div>
-                            </div>
-                          );
-                        })}
+                  <div className="flex-1 relative">
+                    <div className="flex h-16 border-b border-slate-200">
+                      {hours.map(hour => (
+                        <div key={hour} className="w-40 shrink-0 border-r border-slate-100 flex items-center justify-center bg-slate-50/30">
+                          <span className="text-xs font-black text-slate-400 uppercase tracking-tighter">
+                            {hour > 12 ? `${hour-12} PM` : hour === 12 ? '12 PM' : `${hour} AM`}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+
+                    {filteredRooms.map(room => (
+                      <div key={room.id} className="flex h-28 border-b border-slate-100 relative group">
+                        {hours.map(h => <div key={h} className="w-40 shrink-0 border-r border-slate-50/50 group-hover:bg-slate-50/50 transition-colors"></div>)}
+                        {bookings
+                          .filter(b => b.roomId === room.id && isSelectedDate(b.start))
+                          .map(b => {
+                            const startObj = new Date(b.start);
+                            const endObj = new Date(b.end);
+                            const start = startObj.getHours() + (startObj.getMinutes() / 60);
+                            const end = endObj.getHours() + (endObj.getMinutes() / 60);
+                            const leftOffset = (start - 7) * 160;
+                            const width = Math.max((end - start) * 160, 40);
+
+                            return (
+                              <div 
+                                key={b.id} 
+                                className="absolute top-4 h-20 rounded-2xl border-l-4 border-l-indigo-500 bg-white shadow-xl p-4 overflow-hidden border border-slate-100 z-10 hover:-translate-y-1 transition-all cursor-default" 
+                                style={{ left: `${leftOffset + 8}px`, width: `${width - 16}px` }}
+                              >
+                                <div className="font-extrabold text-xs text-slate-800 truncate mb-1">{b.title}</div>
+                                <div className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5">
+                                  <Clock size={12} className="text-indigo-400" /> 
+                                  {startObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
+
+        {/* ROOM SELECTOR MODAL */}
+        {isRoomSelectorOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
+              <div className="p-6 border-b flex items-center justify-between bg-slate-50">
+                <h3 className="font-black text-slate-800 uppercase tracking-tight">Resource Filter</h3>
+                <button onClick={() => setIsRoomSelectorOpen(false)} className="p-2 hover:bg-white rounded-full border border-transparent hover:border-slate-200"><X size={20}/></button>
+              </div>
+              <div className="flex-1 overflow-auto p-4 space-y-2 bg-white">
+                {INITIAL_ROOMS.map(room => (
+                  <button 
+                    key={room.id}
+                    onClick={() => toggleRoomVisibility(room.id)}
+                    className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
+                      selectedRoomIds.includes(room.id) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-100 text-slate-400 opacity-60'
+                    }`}
+                  >
+                    <div className="text-left">
+                      <p className="font-bold text-sm">{room.displayName}</p>
+                      <p className="text-[10px] font-black uppercase opacity-60 mt-1">Matched to: {room.matchName}</p>
+                    </div>
+                    {selectedRoomIds.includes(room.id) && <Check size={18} className="text-indigo-600" />}
+                  </button>
+                ))}
+              </div>
+              <div className="p-6 bg-slate-50 border-t flex gap-2">
+                <button onClick={() => setSelectedRoomIds(INITIAL_ROOMS.map(r => r.id))} className="flex-1 py-3 bg-white border border-slate-200 rounded-xl font-bold text-[10px] uppercase text-slate-600">Select All</button>
+                <button onClick={() => setIsRoomSelectorOpen(false)} className="flex-1 py-3 bg-indigo-600 text-white font-black rounded-xl text-xs uppercase tracking-widest shadow-lg">Done</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showDebug && (
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-amber-200 z-[100] h-80 overflow-hidden shadow-2xl flex flex-col">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-amber-50">
-              <div className="flex items-center gap-3">
-                <Bug size={20} className="text-amber-600" />
-                <h3 className="text-slate-800 font-black text-sm uppercase">PCO Feed Debugger</h3>
-              </div>
+              <h3 className="text-slate-800 font-black text-sm uppercase flex items-center gap-2"><Bug size={20} className="text-amber-600" /> Discover PCO Match Names</h3>
               <button onClick={() => setShowDebug(false)} className="p-2 hover:bg-slate-200 rounded-full"><X size={20}/></button>
             </div>
-            
-            <div className="flex-1 overflow-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div>
-                <h4 className="text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-2"><Info size={12}/> Locations in Feed</h4>
-                <div className="space-y-2">
-                  {discoveredLocations.length > 0 ? discoveredLocations.map((loc, i) => {
-                    const isMapped = INITIAL_ROOMS.some(r => loc.toLowerCase().includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(loc.toLowerCase()));
-                    return (
-                      <div key={i} className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-200">
-                        <code className="text-[11px] font-mono text-slate-600 truncate mr-2">{loc}</code>
-                        <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${isMapped ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                          {isMapped ? 'Mapped' : 'No Match'}
-                        </span>
-                      </div>
-                    );
-                  }) : <p className="text-xs text-slate-400 italic">No locations found. Check link.</p>}
-                </div>
-              </div>
-              
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 h-fit">
-                <h4 className="text-[10px] font-black uppercase text-slate-400 mb-3">Troubleshooting</h4>
-                <ul className="text-[11px] space-y-3 text-slate-600">
-                  <li><strong>Step 1:</strong> If no data shows, check the browser console for fetch errors.</li>
-                  <li><strong>Step 2:</strong> Ensure your Vercel <code>/api/calendar</code> endpoint is deployed.</li>
-                  <li><strong>Step 3:</strong> Match the "Red" names above into your <code>INITIAL_ROOMS</code> list.</li>
-                </ul>
-              </div>
+            <div className="flex-1 overflow-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {discoveredLocations.map((loc, i) => {
+                const isMapped = INITIAL_ROOMS.some(r => loc.toLowerCase().includes(r.matchName.toLowerCase()) || r.matchName.toLowerCase().includes(loc.toLowerCase()));
+                return (
+                  <div key={i} className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200">
+                    <code className="text-[11px] font-mono text-slate-600 truncate">{loc}</code>
+                    <span className={`text-[8px] font-black uppercase px-2 py-1 rounded ${isMapped ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                      {isMapped ? 'Mapped' : 'Unmapped'}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
