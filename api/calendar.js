@@ -1,45 +1,58 @@
+/* api/calendar.js */
 export default async function handler(req, res) {
-  // We use Environment Variables to keep your PCO credentials secret
-  const PCO_APP_ID = process.env.PCO_APP_ID;
-  const PCO_SECRET = process.env.PCO_SECRET;
+  const { date } = req.query;
+  const appId = process.env.PCO_APP_ID;
+  const secret = process.env.PCO_SECRET;
 
-  if (!PCO_APP_ID || !PCO_SECRET) {
+  if (!appId || !secret) {
     return res.status(500).json({ 
-      error: 'PCO Credentials missing. Add PCO_APP_ID and PCO_SECRET to Vercel Environment Variables.' 
+      error: "PCO Credentials missing in Vercel Environment Variables",
+      debug: [] 
     });
   }
-
-  const { date } = req.query; // Expecting YYYY-MM-DD
-  const auth = Buffer.from(`${PCO_APP_ID}:${PCO_SECRET}`).toString('base64');
 
   try {
-    /**
-     * We fetch "Bookings" for the specific date.
-     * filter=future,past ensures we get all events for that day.
-     * include=resource allows us to see which room is attached to the booking.
-     */
-    const url = `https://api.planningcenteronline.com/resources/v2/bookings?filter=future,past&include=resource&where[starts_at]=${date}T00:00:00Z&where[ends_at]=${date}T23:59:59Z&per_page=100`;
+    const auth = Buffer.from(`${appId}:${secret}`).toString('base64');
     
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Basic ${auth}`,
-      }
-    });
+    // 1. Fetch all resources (rooms) first for the "Bug" discovery menu
+    const resourcesRes = await fetch(
+      'https://api.planningcenteronline.com/resources/v2/resources?per_page=100',
+      { headers: { 'Authorization': `Basic ${auth}` } }
+    );
+    const resourcesData = await resourcesRes.json();
+    
+    const resourceList = resourcesData.data?.map(r => ({
+      id: r.id,
+      name: r.attributes.name,
+      path: r.links.self
+    })) || [];
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`PCO API responded with ${response.status}: ${errorText}`);
-    }
+    // 2. Fetch events for the specific date
+    // We filter for events that are "shared" and occurring on the requested date
+    const start = `${date}T00:00:00Z`;
+    const end = `${date}T23:59:59Z`;
+    
+    const eventsRes = await fetch(
+      `https://api.planningcenteronline.com/resources/v2/event_instances?include=event,resource_bookings&filter=occurring_between&starts=${start}&ends=${end}`,
+      { headers: { 'Authorization': `Basic ${auth}` } }
+    );
+    const eventsData = await eventsRes.json();
 
-    const data = await response.json();
+    // 3. Flatten the PCO JSON relationship structure into a simple array for the dashboard
+    const formattedEvents = [];
     
-    // Set headers for security and performance
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
-    
-    return res.status(200).json(data);
-  } catch (error) {
-    console.error('PCO API Error:', error);
-    return res.status(500).json({ error: error.message });
-  }
-}
+    if (eventsData.included) {
+      const bookings = eventsData.included.filter(i => i.type === 'ResourceBooking');
+      const eventDetails = eventsData.included.filter(i => i.type === 'Event');
+
+      bookings.forEach(booking => {
+        const parentInstance = eventsData.data.find(d => 
+          d.relationships.resource_bookings.data.some(b => b.id === booking.id)
+        );
+        
+        if (parentInstance) {
+          const eventInfo = eventDetails.find(e => e.id === parentInstance.relationships.event.data.id);
+          
+          formattedEvents.push({
+            id: booking.id,
+            title: eventInfo?.attributes?.name || "
