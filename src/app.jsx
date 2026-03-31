@@ -17,12 +17,14 @@ import {
 } from 'lucide-react';
 
 /**
- * PCO ROOM AVAILABILITY DASHBOARD
- * This file handles the UI and the logic for parsing the Planning Center .ics feed.
- * It attempts to use /api/calendar (the Vercel function) to bypass CORS.
+ * PCO ROOM AVAILABILITY DASHBOARD (src/app.jsx)
+ * This is the main engine of your app. 
+ * It fetches your .ics feed through your /api/calendar middleman.
  */
 
-// UPDATE THIS LIST: The 'name' must match the 'LOCATION' field in your PCO Calendar events.
+// --- CONFIGURATION ---
+// IMPORTANT: Update these names to match exactly what you see in the "Debug" panel 
+// once the app is running.
 const INITIAL_ROOMS = [
   { id: 'r1', name: 'Main Sanctuary', category: 'Worship', capacity: 450 },
   { id: 'r2', name: 'Youth Center', category: 'Youth', capacity: 120 },
@@ -46,7 +48,7 @@ const App = () => {
   const hours = Array.from({ length: 16 }, (_, i) => i + 7); // 7 AM to 10 PM
   const categories = ['All', ...new Set(INITIAL_ROOMS.map(r => r.category))];
 
-  // --- ICS HELPER: PARSE DATES ---
+  // --- ICS PARSER HELPERS ---
   const parseICSDate = (icsDate) => {
     const year = icsDate.substring(0, 4);
     const month = parseInt(icsDate.substring(4, 6)) - 1;
@@ -59,7 +61,6 @@ const App = () => {
     return new Date(year, month, day).toISOString();
   };
 
-  // --- ICS HELPER: PARSE ENTIRE FILE ---
   const parseICS = (data) => {
     const events = [];
     const lines = data.split(/\r?\n/);
@@ -90,19 +91,12 @@ const App = () => {
 
     try {
       const targetUrl = icsUrl.replace('webcal://', 'https://');
-      let response;
       
-      try {
-        // First try the Vercel Serverless Function
-        response = await fetch(`/api/calendar?url=${encodeURIComponent(targetUrl)}`);
-        if (!response.ok) throw new Error('Local API not available');
-      } catch (e) {
-        // Fallback to a public proxy for local development/previews
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}&timestamp=${Date.now()}`;
-        const proxyRes = await fetch(proxyUrl);
-        const json = await proxyRes.json();
-        if (!json.contents) throw new Error("Proxy failed");
-        response = { text: () => Promise.resolve(json.contents) };
+      // We fetch through our Vercel API middleman to bypass CORS
+      const response = await fetch(`/api/calendar?url=${encodeURIComponent(targetUrl)}`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
       }
       
       const rawData = await response.text();
@@ -111,7 +105,6 @@ const App = () => {
       setDiscoveredLocations([...new Set(parsedEvents.map(e => e.location))]);
 
       const mappedBookings = parsedEvents.map((event, idx) => {
-        // Try to find a room match in our list
         const room = INITIAL_ROOMS.find(r => 
           event.location.toLowerCase().includes(r.name.toLowerCase()) || 
           r.name.toLowerCase().includes(event.location.toLowerCase())
@@ -130,7 +123,7 @@ const App = () => {
       setBookings(mappedBookings);
     } catch (err) {
       console.error(err);
-      setError("Calendar Sync Error. Ensure your /api/calendar route is deployed on Vercel.");
+      setError("Sync failed. Check your /api/calendar setup on Vercel.");
     } finally {
       setIsLoading(false);
     }
@@ -156,7 +149,7 @@ const App = () => {
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm shrink-0">
         <div className="flex items-center gap-3">
-          <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg">
+          <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg shadow-indigo-200">
             <Calendar size={24} />
           </div>
           <div>
@@ -164,18 +157,18 @@ const App = () => {
             <div className="flex items-center gap-2 mt-0.5">
               <div className={`h-2 w-2 rounded-full ${bookings.length > 0 ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`}></div>
               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                {bookings.filter(b => b.roomId).length} Rooms Active
+                {bookings.filter(b => b.roomId).length} Rooms Synced
               </p>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-2xl border border-slate-200">
-          <button onClick={() => changeDate(-1)} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all"><ChevronLeft size={20} /></button>
+          <button onClick={() => changeDate(-1)} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all text-slate-600"><ChevronLeft size={20} /></button>
           <span className="px-6 font-bold text-slate-700 min-w-[200px] text-center text-sm">
             {currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
           </span>
-          <button onClick={() => changeDate(1)} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all"><ChevronRight size={20} /></button>
+          <button onClick={() => changeDate(1)} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all text-slate-600"><ChevronRight size={20} /></button>
         </div>
 
         <div className="hidden lg:flex items-center gap-2 border-l border-slate-200 pl-4">
@@ -208,7 +201,7 @@ const App = () => {
             <input 
               type="text" 
               placeholder="Search rooms..." 
-              className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm font-medium"
+              className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm font-medium focus:ring-2 focus:ring-indigo-100"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -219,14 +212,14 @@ const App = () => {
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all ${
-                  selectedCategory === cat ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-500 hover:bg-slate-50'
+                  selectedCategory === cat ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
                 }`}
               >
                 {cat}
               </button>
             ))}
           </div>
-          <button onClick={() => setShowDebug(!showDebug)} className={`ml-auto p-2 rounded-lg border transition-all ${showDebug ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-slate-200 text-slate-400'}`}>
+          <button onClick={() => setShowDebug(!showDebug)} className={`ml-auto p-2 rounded-lg border transition-all ${showDebug ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-slate-200 text-slate-400 hover:text-indigo-600'}`}>
             <Bug size={20} />
           </button>
         </div>
@@ -235,10 +228,11 @@ const App = () => {
           <div className="min-w-max p-8 pb-32">
             <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
               <div className="flex">
+                {/* Rooms Matrix Side Panel */}
                 <div className="w-72 shrink-0 bg-slate-50/50 border-r border-slate-200">
-                  <div className="h-16 border-b border-slate-200 flex items-center px-6 bg-slate-100/50 uppercase tracking-widest text-[10px] font-black text-slate-400">Rooms</div>
+                  <div className="h-16 border-b border-slate-200 flex items-center px-6 bg-slate-100/50 uppercase tracking-widest text-[10px] font-black text-slate-400">Resources</div>
                   {filteredRooms.map(room => (
-                    <div key={room.id} className="h-28 border-b border-slate-100 px-6 flex flex-col justify-center">
+                    <div key={room.id} className="h-28 border-b border-slate-100 px-6 flex flex-col justify-center hover:bg-slate-100/30 transition-colors">
                       <span className="font-extrabold text-slate-800 text-base">{room.name}</span>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[10px] font-bold bg-white border px-2 py-0.5 rounded-lg text-slate-500 uppercase">{room.category}</span>
@@ -248,11 +242,12 @@ const App = () => {
                   ))}
                 </div>
 
+                {/* Timeline Visualization */}
                 <div className="flex-1 relative">
                   <div className="flex h-16 border-b border-slate-200">
                     {hours.map(hour => (
                       <div key={hour} className="w-40 shrink-0 border-r border-slate-100 flex items-center justify-center bg-slate-50/30">
-                        <span className="text-xs font-black text-slate-400 uppercase">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-tighter">
                           {hour > 12 ? `${hour-12} PM` : hour === 12 ? '12 PM' : `${hour} AM`}
                         </span>
                       </div>
@@ -261,7 +256,7 @@ const App = () => {
 
                   {filteredRooms.map(room => (
                     <div key={room.id} className="flex h-28 border-b border-slate-100 relative group">
-                      {hours.map(h => <div key={h} className="w-40 shrink-0 border-r border-slate-50/50 group-hover:bg-slate-50/50"></div>)}
+                      {hours.map(h => <div key={h} className="w-40 shrink-0 border-r border-slate-50/50 group-hover:bg-slate-50/50 transition-colors"></div>)}
                       
                       {bookings
                         .filter(b => b.roomId === room.id && b.start.startsWith(currentDate.toISOString().split('T')[0]))
@@ -278,7 +273,7 @@ const App = () => {
                               <div className="font-extrabold text-xs text-slate-800 truncate mb-1">{b.title}</div>
                               <div className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5">
                                 <Clock size={12} className="text-indigo-400" /> 
-                                {startObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                                {startObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - {endObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                               </div>
                             </div>
                           );
@@ -291,13 +286,14 @@ const App = () => {
           </div>
         </div>
 
+        {/* Debug Panel */}
         {showDebug && (
-          <div className="absolute bottom-0 left-0 right-0 bg-amber-50 border-t-2 border-amber-200 z-50 p-4 max-h-64 overflow-auto">
-            <h3 className="text-amber-800 font-black text-[10px] uppercase mb-2">Locations Discovered in ICS:</h3>
+          <div className="absolute bottom-0 left-0 right-0 bg-amber-50 border-t-2 border-amber-200 z-50 p-4 max-h-64 overflow-auto shadow-2xl">
+            <h3 className="text-amber-800 font-black text-[10px] uppercase mb-2">Locations Discovered in PCO:</h3>
             <div className="flex flex-wrap gap-2">
-              {discoveredLocations.map((loc, i) => (
-                <code key={i} className="bg-white border border-amber-200 px-2 py-1 rounded text-[10px] font-mono">{loc}</code>
-              ))}
+              {discoveredLocations.length > 0 ? discoveredLocations.map((loc, i) => (
+                <code key={i} className="bg-white border border-amber-200 px-2 py-1 rounded text-[10px] font-mono shadow-sm">{loc}</code>
+              )) : <span className="text-xs text-amber-600">No data loaded. Push to Vercel to check connection.</span>}
             </div>
           </div>
         )}
