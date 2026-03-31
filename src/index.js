@@ -1,11 +1,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './app'; // Matches your lowercase 'app.jsx' filename
+import App from './app.jsx'; 
 
 /**
  * ENTRY POINT (src/index.js)
- * This file tells React to take the logic in app.jsx and 
- * inject it into the 'root' div in public/index.html.
+ * This file connects your React dashboard logic to the HTML shell.
+ * * CRITICAL FOR VERCEL:
+ * 1. The import path './app.jsx' matches your lowercase filename exactly.
+ * 2. Including the '.jsx' extension helps the build engine resolve the module.
  */
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
