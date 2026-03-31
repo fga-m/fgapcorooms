@@ -12,7 +12,10 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>Resource Planner | PCO Sync</title>
+    
+    <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <style>
       body {
         margin: 0;
@@ -23,7 +26,8 @@
         -moz-osx-font-smoothing: grayscale;
         background-color: #f8fafc;
       }
-      /* Custom scrollbar for the timeline */
+
+      /* Utility to hide scrollbars while maintaining functionality */
       .scrollbar-hide::-webkit-scrollbar {
         display: none;
       }
@@ -31,10 +35,19 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
+
+      /* Smooth transitions for dashboard elements */
+      .transition-all {
+        transition-property: all;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 150ms;
+      }
     </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    
+    <!-- React will mount the App component inside this div -->
     <div id="root"></div>
   </body>
 </html>
