@@ -1,32 +1,42 @@
 export default async function handler(req, res) {
-  const { url } = req.query;
+  // We use Environment Variables to keep your PCO credentials secret
+  const PCO_APP_ID = process.env.PCO_APP_ID;
+  const PCO_SECRET = process.env.PCO_SECRET;
 
-  // Basic validation to ensure a URL was provided
-  if (!url) {
-    return res.status(400).json({ error: 'Missing URL parameter' });
+  if (!PCO_APP_ID || !PCO_SECRET) {
+    return res.status(500).json({ 
+      error: 'PCO Credentials missing. Add PCO_APP_ID and PCO_SECRET to Vercel Environment Variables.' 
+    });
   }
 
+  const { date } = req.query; // Expecting YYYY-MM-DD
+  const auth = Buffer.from(`${PCO_APP_ID}:${PCO_SECRET}`).toString('base64');
+
   try {
-    // Planning Center links often start with webcal://
-    // We convert it to https:// so the server can fetch it normally
-    const targetUrl = url.replace('webcal://', 'https://');
+    /**
+     * We fetch "Bookings" for the specific date.
+     * We include "resource" to get the room names/details.
+     */
+    const url = `https://api.planningcenteronline.com/resources/v2/bookings?filter=future,past&include=resource&where[starts_at]=${date}T00:00:00Z&where[ends_at]=${date}T23:59:59Z`;
     
-    const response = await fetch(targetUrl);
-    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Basic ${auth}`,
+      }
+    });
+
     if (!response.ok) {
-      throw new Error(`PCO responded with status: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`PCO API responded with ${response.status}: ${errorText}`);
     }
 
-    const data = await response.text();
-
-    // Set the correct content type for an iCalendar file
-    res.setHeader('Content-Type', 'text/calendar');
-    // Allow your frontend to access this data
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    const data = await response.json();
     
-    return res.status(200).send(data);
+    // Allow frontend access
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return res.status(200).json(data);
   } catch (error) {
-    console.error('Calendar Fetch Error:', error);
-    return res.status(500).json({ error: 'Failed to fetch calendar data from Planning Center' });
+    console.error('PCO API Error:', error);
+    return res.status(500).json({ error: error.message });
   }
 }
