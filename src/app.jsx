@@ -17,15 +17,17 @@ import {
   Settings,
   Check,
   ArrowLeft,
-  ArrowRight
+  ArrowRight,
+  RotateCcw
 } from 'lucide-react';
 
 /**
  * PCO ROOM AVAILABILITY DASHBOARD
- * Updates:
- * 1. Fixed "NOW" Indicator: Improved centering and visibility to prevent clipping.
- * 2. Localized Time Navigation: Integrated controls into the grid header.
- * 3. FGAM Room Mapping: Preserved specific technical match names.
+ * Features:
+ * 1. Updated ICS Link: Using the new technical calendar feed.
+ * 2. FGAM Room Mapping: Matching technical names to friendly display labels.
+ * 3. Navigation: "Today" reset button and a localized 8-hour shifting window.
+ * 4. Timezone Sync: Accurate UTC to Local time conversion for Australia/Melbourne.
  */
 
 const INITIAL_ROOMS = [
@@ -45,7 +47,10 @@ const App = () => {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedRoomIds, setSelectedRoomIds] = useState(INITIAL_ROOMS.map(r => r.id));
   const [isRoomSelectorOpen, setIsRoomSelectorOpen] = useState(false);
-  const [icsUrl, setIcsUrl] = useState('webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2Q-J8pkxZVanF9QAhIozWROnGdixZbtqcSRmJPDZsXmGmLFXlbiqcQH5MaXZOamFrNZc4ZYcRckFiXmFgP1sBcnZrIByRQwmZfJBgBf8xjw938709825ac6df76089393a1f8c561d56705a7e4');
+  
+  // Updated ICS URL
+  const [icsUrl, setIcsUrl] = useState('webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2Q-J8pkxZVanF9QAhIozWROnGdixZbtqcSRmJPDZsXmGmLFXlbiqcQH5MaXZOamFrNZc4ZYcRckFiXmFlezW7EXJ2ayAcmUTDYAzjAXXg==548d76cc55f628c9489f7e3f18a127b99906f3d3');
+  
   const [bookings, setBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -161,6 +166,14 @@ const App = () => {
     setIsLoading(false);
   }, [icsUrl, processCalendarData]);
 
+  const resetToToday = () => {
+    const now = new Date();
+    setCurrentDate(now);
+    const currentHour = now.getHours();
+    const targetHour = Math.max(0, Math.min(24 - visibleHoursCount, currentHour));
+    setViewStartHour(targetHour);
+  };
+
   useEffect(() => {
     fetchCalendar();
     const now = new Date();
@@ -235,15 +248,22 @@ const App = () => {
           </div>
         </div>
 
-        {/* Center: Date Navigation Only */}
-        <div className="flex items-center gap-3">
+        {/* Center: Date Navigation */}
+        <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
-                <button onClick={() => changeDate(-1)} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all text-slate-600"><ChevronLeft size={18} /></button>
+                <button onClick={() => changeDate(-1)} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all text-slate-600" title="Previous Day"><ChevronLeft size={18} /></button>
                 <span className="px-4 font-black text-slate-700 min-w-[160px] text-center text-xs uppercase tracking-tight">
                     {currentDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                 </span>
-                <button onClick={() => changeDate(1)} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all text-slate-600"><ChevronRight size={18} /></button>
+                <button onClick={() => changeDate(1)} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all text-slate-600" title="Next Day"><ChevronRight size={18} /></button>
             </div>
+            <button 
+              onClick={resetToToday} 
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest border border-slate-200 transition-all flex items-center gap-2"
+              title="Return to Today"
+            >
+              <RotateCcw size={14} /> Today
+            </button>
         </div>
 
         {/* Right: View & Sync Controls */}
@@ -414,7 +434,7 @@ const App = () => {
                   <button key={room.id} onClick={() => toggleRoomVisibility(room.id)} className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${selectedRoomIds.includes(room.id) ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}>
                     <div className="text-left">
                       <p className="text-sm">{room.displayName}</p>
-                      <p className="text-[10px] font-black uppercase opacity-60 mt-1">PCO Location Match</p>
+                      <p className="text-[10px] font-black uppercase opacity-60 mt-1">PCO Match: {room.matchName.substring(0, 30)}...</p>
                     </div>
                     {selectedRoomIds.includes(room.id) && <Check size={18} className="text-indigo-600" />}
                   </button>
