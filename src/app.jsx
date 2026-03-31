@@ -31,7 +31,7 @@ import {
 // displayName: The friendly name you want displayed on the dashboard.
 const INITIAL_ROOMS = [
   { id: 'r1', matchName: 'FGA Melbourne - Sanctuary - 38 Lexton Rd, Box Hill North, VIC 3129', displayName: 'Sanctuary', category: 'Worship', capacity: 450 },
-  { id: 'r2', matchName: 'FGAM Lobby)', displayName: 'Lobby', category: 'Youth', capacity: 120 },
+  { id: 'r2', matchName: 'FGAM Lobby', displayName: 'Lobby', category: 'Youth', capacity: 120 },
   { id: 'r3', matchName: 'Admin Conference A', displayName: 'Conf Room A', category: 'Admin', capacity: 15 },
   { id: 'r4', matchName: 'Kids Theater Area', displayName: 'Kids Theater', category: 'Kids', capacity: 80 },
   { id: 'r5', matchName: 'Main Lobby / Cafe', displayName: 'Cafe', category: 'General', capacity: 60 },
