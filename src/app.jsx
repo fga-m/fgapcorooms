@@ -32,10 +32,10 @@ import {
 const INITIAL_ROOMS = [
   { id: 'r1', matchName: 'FGA Melbourne - Sanctuary - 38 Lexton Rd, Box Hill North, VIC 3129', displayName: 'Sanctuary', category: 'Worship', capacity: 450 },
   { id: 'r2', matchName: 'FGAM Lobby', displayName: 'Lobby', category: 'Youth', capacity: 120 },
-  { id: 'r3', matchName: 'Admin Conference A', displayName: 'Conf Room A', category: 'Admin', capacity: 15 },
-  { id: 'r4', matchName: 'Kids Theater Area', displayName: 'Kids Theater', category: 'Kids', capacity: 80 },
-  { id: 'r5', matchName: 'Main Lobby / Cafe', displayName: 'Cafe', category: 'General', capacity: 60 },
-  { id: 'r6', matchName: 'Prod Suite 1', displayName: 'Production', category: 'Tech', capacity: 8 },
+  { id: 'r3', matchName: 'http://fgam.org.au/zoom', displayName: 'Zoom', category: 'Admin', capacity: 15 },
+  { id: 'r4', matchName: 'http://fgam.org.au/zoom2', displayName: 'Zoom 2', category: 'Kids', capacity: 80 },
+  { id: 'r5', matchName: 'http://fgam.org.au/zoom3', displayName: 'Zoom 3', category: 'General', capacity: 60 },
+  { id: 'r6', matchName: 'http://fgam.org.au/zoom4', displayName: 'Zoom 4', category: 'Tech', capacity: 8 },
 ];
 
 const App = () => {
