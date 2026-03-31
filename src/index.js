@@ -4,9 +4,10 @@ import App from './app.jsx';
 
 /**
  * src/index.js
- * * This is the main entry point for the React application.
- * Note: The '.jsx' extension is required in the import statement
- * to satisfy the strict ESM requirements on Vercel.
+ * * FINAL BUILD FIX:
+ * The error "Module not found: Can't resolve './app'" in your Vercel logs 
+ * is caused by the missing '.jsx' extension. 
+ * * In ESM mode (which we are using), extensions are mandatory.
  */
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
