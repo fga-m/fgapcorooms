@@ -15,9 +15,10 @@ export default async function handler(req, res) {
   try {
     /**
      * We fetch "Bookings" for the specific date.
-     * We include "resource" to get the room names/details.
+     * filter=future,past ensures we get all events for that day.
+     * include=resource allows us to see which room is attached to the booking.
      */
-    const url = `https://api.planningcenteronline.com/resources/v2/bookings?filter=future,past&include=resource&where[starts_at]=${date}T00:00:00Z&where[ends_at]=${date}T23:59:59Z`;
+    const url = `https://api.planningcenteronline.com/resources/v2/bookings?filter=future,past&include=resource&where[starts_at]=${date}T00:00:00Z&where[ends_at]=${date}T23:59:59Z&per_page=100`;
     
     const response = await fetch(url, {
       headers: {
@@ -32,8 +33,10 @@ export default async function handler(req, res) {
 
     const data = await response.json();
     
-    // Allow frontend access
+    // Set headers for security and performance
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
+    
     return res.status(200).json(data);
   } catch (error) {
     console.error('PCO API Error:', error);
