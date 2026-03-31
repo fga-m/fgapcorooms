@@ -30,7 +30,7 @@ import {
 // matchName: The EXACT text discovered in your PCO feed (use the Bug icon to find these).
 // displayName: The friendly name you want displayed on the dashboard.
 const INITIAL_ROOMS = [
-  { id: 'r1', matchName: 'FGA Melbourne - Sanctuary - 38 Lexton Rd, Box Hill North, VIC 3129', displayName: 'Sanctuary', category: 'Worship', capacity: 450 },
+  { id: 'r1', matchName: 'FGAM Sanctuary - 38 Lexton Rd, Box Hill North, VIC 3129', displayName: 'Sanctuary', category: 'Worship', capacity: 450 },
   { id: 'r2', matchName: 'FGAM Lobby', displayName: 'Lobby', category: 'Youth', capacity: 120 },
   { id: 'r3', matchName: 'http://fgam.org.au/zoom', displayName: 'Zoom', category: 'Admin', capacity: 15 },
   { id: 'r4', matchName: 'http://fgam.org.au/zoom2', displayName: 'Zoom 2', category: 'Kids', capacity: 80 },
