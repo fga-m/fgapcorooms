@@ -1,391 +1,341 @@
 /* eslint-disable */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  Search, 
   ChevronLeft, 
   ChevronRight, 
+  Calendar, 
+  Clock, 
   Users, 
-  Clock,
-  AlertCircle,
-  RefreshCw,
-  Bug,
-  X,
-  Settings,
-  Check,
-  ArrowLeft,
-  ArrowRight,
-  RotateCcw,
-  Zap
+  MapPin, 
+  AlertCircle, 
+  Bug, 
+  CheckCircle2,
+  XCircle,
+  RefreshCw
 } from 'lucide-react';
 
-/**
- * PCO ROOM AVAILABILITY DASHBOARD - API VERSION
- * CLEAN VERSION: Removed unused imports to prevent Vercel build failure.
- */
-
 const INITIAL_ROOMS = [
-  { 
-    id: 'r1', 
-    pcoResourceId: '', // Enter ID from Bug discovery menu
-    displayName: 'Sanctuary', 
-    category: 'Worship', 
-    capacity: 450 
-  },
-  { 
-    id: 'r2', 
-    pcoResourceId: '', 
-    displayName: 'Lobby', 
-    category: 'General', 
-    capacity: 120 
-  },
-  { 
-    id: 'r3', 
-    pcoResourceId: '', 
-    displayName: 'Zoom', 
-    category: 'Digital', 
-    capacity: 100 
-  },
-  { 
-    id: 'r4', 
-    pcoResourceId: '', 
-    displayName: 'Zoom 2', 
-    category: 'Digital', 
-    capacity: 100 
-  },
-  { 
-    id: 'r5', 
-    pcoResourceId: '', 
-    displayName: 'Zoom 3', 
-    category: 'Digital', 
-    capacity: 100 
-  },
-  { 
-    id: 'r6', 
-    pcoResourceId: '', 
-    displayName: 'Zoom 4', 
-    category: 'Digital', 
-    capacity: 100 
-  },
-  { 
-    id: 'r7', 
-    pcoResourceId: '', 
-    displayName: 'Multipurpose Room', 
-    category: 'General', 
-    capacity: 50 
-  },
+  { id: 'r1', pcoResourceId: '', displayName: 'Sanctuary', category: 'Worship', capacity: 450 },
+  { id: 'r2', pcoResourceId: '', displayName: 'Lobby', category: 'Youth', capacity: 120 },
+  { id: 'r3', pcoResourceId: '', displayName: 'Zoom 1', category: 'Admin', capacity: 15 },
+  { id: 'r4', pcoResourceId: '', displayName: 'Zoom 2', category: 'Kids', capacity: 80 },
+  { id: 'r5', pcoResourceId: '', displayName: 'Zoom 3', category: 'General', capacity: 60 },
+  { id: 'r6', pcoResourceId: '', displayName: 'Zoom 4', category: 'Tech', capacity: 8 },
+  { id: 'r7', pcoResourceId: '', displayName: 'Multipurpose Room', category: 'Tech', capacity: 8 },
 ];
 
-const App = () => {
+const CATEGORY_COLORS = {
+  Worship: 'bg-blue-500',
+  Youth: 'bg-purple-500',
+  Admin: 'bg-gray-500',
+  Kids: 'bg-orange-500',
+  General: 'bg-green-500',
+  Tech: 'bg-red-500'
+};
+
+const Dashboard = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewStartHour, setViewStartHour] = useState(8); 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedRoomIds, setSelectedRoomIds] = useState(INITIAL_ROOMS.map(r => r.id));
-  const [isRoomSelectorOpen, setIsRoomSelectorOpen] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [bookings, setBookings] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [startHour, setStartHour] = useState(8);
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [debugData, setDebugData] = useState(null);
   const [showDebug, setShowDebug] = useState(false);
-  const [apiResources, setApiResources] = useState([]); 
-  
-  const visibleHoursCount = 8;
-  const categories = ['All', ...new Set(INITIAL_ROOMS.map(r => r.category))];
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const scrollContainerRef = useRef(null);
 
-  const fetchPCOData = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    const dateStr = currentDate.toISOString().split('T')[0];
+  const hours = useMemo(() => 
+    Array.from({ length: 8 }, (_, i) => (startHour + i) % 24),
+    [startHour]
+  );
 
+  const fetchCalendar = async (date) => {
+    setLoading(true);
     try {
-      const response = await fetch(`/api/calendar?date=${dateStr}`);
-      const result = await response.json();
-
-      if (!response.ok) throw new Error(result.error || 'Failed to fetch API data');
-
-      const rawResources = (result.included || []).filter(item => item.type === 'Resource');
-      setApiResources(rawResources);
-
-      const mappedBookings = (result.data || []).map(booking => {
-        const resourceId = booking.relationships?.resource?.data?.id;
-        const room = INITIAL_ROOMS.find(r => r.pcoResourceId === resourceId);
-        
-        return {
-          id: booking.id,
-          roomId: room ? room.id : null,
-          title: booking.attributes.event_name || "Untitled Event",
-          start: booking.attributes.starts_at,
-          end: booking.attributes.ends_at,
-        };
-      });
-
-      setBookings(mappedBookings);
+      const dateString = date.toISOString().split('T')[0];
+      const response = await fetch(`/api/calendar?date=${dateString}`);
+      const data = await response.json();
+      
+      if (data.error) throw new Error(data.error);
+      
+      setEvents(data.events || []);
+      setDebugData(data.debug);
       setLastUpdated(new Date());
+      setError(null);
     } catch (err) {
       setError(err.message);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  }, [currentDate]);
+  };
 
   useEffect(() => {
-    fetchPCOData();
-  }, [fetchPCOData]);
-
-  const resetToToday = () => {
-    const now = new Date();
-    setCurrentDate(now);
-    const currentHour = now.getHours();
-    setViewStartHour(Math.max(0, Math.min(24 - visibleHoursCount, currentHour)));
-  };
+    fetchCalendar(currentDate);
+    const interval = setInterval(() => fetchCalendar(currentDate), 300000);
+    return () => clearInterval(interval);
+  }, [currentDate]);
 
   const shiftTime = (amount) => {
-    setViewStartHour(prev => Math.max(0, Math.min(24 - visibleHoursCount, prev + amount)));
+    setStartHour((prev) => (prev + amount + 24) % 24);
   };
 
-  const filteredRooms = INITIAL_ROOMS.filter(room => {
-    const matchesSearch = room.displayName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'All' || room.category === selectedCategory;
-    const isVisible = selectedRoomIds.includes(room.id);
-    return matchesSearch && matchesCategory && isVisible;
-  });
+  const changeDate = (days) => {
+    const next = new Date(currentDate);
+    next.setDate(next.getDate() + days);
+    setCurrentDate(next);
+  };
 
-  const getNowIndicatorPosition = () => {
+  const goToToday = () => {
     const now = new Date();
-    if (now.toDateString() !== currentDate.toDateString()) return null;
-    const hour = now.getHours() + (now.getMinutes() / 60);
-    if (hour < viewStartHour || hour > viewStartHour + visibleHoursCount) return null;
-    return ((hour - viewStartHour) / visibleHoursCount) * 100;
+    setCurrentDate(now);
+    setStartHour(Math.max(0, Math.min(now.getHours() - 2, 16)));
   };
 
-  const formatHour = (h) => {
-    if (h === 0 || h === 24) return "12 AM";
-    if (h === 12) return "12 PM";
-    return h > 12 ? `${h - 12} PM` : `${h} AM`;
+  const getEventStyle = (event) => {
+    const start = new Date(event.start);
+    const end = new Date(event.end);
+    
+    const viewStart = new Date(currentDate);
+    viewStart.setHours(startHour, 0, 0, 0);
+    const viewEnd = new Date(currentDate);
+    viewEnd.setHours(startHour + 8, 0, 0, 0);
+
+    const effectiveStart = Math.max(start, viewStart);
+    const effectiveEnd = Math.min(end, viewEnd);
+    
+    if (effectiveEnd <= effectiveStart) return { display: 'none' };
+
+    const left = ((effectiveStart - viewStart) / (8 * 3600000)) * 100;
+    const width = ((effectiveEnd - effectiveStart) / (8 * 3600000)) * 100;
+
+    return {
+      left: `${left}%`,
+      width: `${width}%`,
+      minWidth: '2px'
+    };
   };
 
-  const nowPos = getNowIndicatorPosition();
-  const viewHours = Array.from({ length: visibleHoursCount }, (_, i) => viewStartHour + i);
+  const NowIndicator = () => {
+    const [now, setNow] = useState(new Date());
+    
+    useEffect(() => {
+      const timer = setInterval(() => setNow(new Date()), 60000);
+      return () => clearInterval(timer);
+    }, []);
+
+    const viewStart = new Date(currentDate);
+    viewStart.setHours(startHour, 0, 0, 0);
+    const viewEnd = new Date(currentDate);
+    viewEnd.setHours(startHour + 8, 0, 0, 0);
+
+    if (now < viewStart || now > viewEnd) return null;
+
+    const position = ((now - viewStart) / (8 * 3600000)) * 100;
+
+    return (
+      <div 
+        className="absolute top-0 bottom-0 w-px bg-red-500 z-30 pointer-events-none"
+        style={{ left: `${position}%` }}
+      >
+        <div className="absolute -top-1 left-1/2 -translate-x-1/2 bg-red-500 text-[10px] text-white px-1 rounded font-bold shadow-sm">
+          NOW
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 overflow-hidden">
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg">
-            <Zap size={24} />
+    <div className="min-h-screen bg-slate-50 p-4 lg:p-8 font-sans text-slate-900">
+      {/* Header */}
+      <header className="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="bg-blue-600 p-2.5 rounded-xl shadow-lg shadow-blue-200">
+            <Calendar className="text-white w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-800">Resource API</h1>
-            <div className="flex items-center gap-2 mt-0.5">
-              <div className={`h-2 w-2 rounded-full ${bookings.length > 0 ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`}></div>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1">
-                {bookings.filter(b => b.roomId).length} Linked
-                {lastUpdated && <span className="opacity-50 ml-1">· {lastUpdated.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>}
-              </p>
-            </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-800">FGAM ROOMS</h1>
+            <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Planning Center Live</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
-                <button onClick={() => {
-                  const d = new Date(currentDate);
-                  d.setDate(d.getDate() - 1);
-                  setCurrentDate(d);
-                }} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all text-slate-600"><ChevronLeft size={18} /></button>
-                <span className="px-4 font-black text-slate-700 min-w-[160px] text-center text-xs uppercase tracking-tight">
-                    {currentDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                </span>
-                <button onClick={() => {
-                  const d = new Date(currentDate);
-                  d.setDate(d.getDate() + 1);
-                  setCurrentDate(d);
-                }} className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition-all text-slate-600"><ChevronRight size={18} /></button>
-            </div>
-            <button onClick={resetToToday} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest border border-slate-200 transition-all flex items-center gap-2">
-              <RotateCcw size={14} /> Today
-            </button>
+        <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200">
+          <button onClick={() => changeDate(-1)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          
+          <button 
+            onClick={goToToday}
+            className="px-4 py-1.5 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-100"
+          >
+            TODAY
+          </button>
+
+          <div className="px-4 py-1.5 bg-slate-50 rounded-lg border border-slate-100 min-w-[160px] text-center">
+            <span className="font-bold text-slate-700">
+              {currentDate.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </span>
+          </div>
+
+          <button onClick={() => changeDate(1)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <ChevronRight className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="hidden lg:flex items-center gap-2 border-l border-slate-200 pl-4">
-          <button onClick={() => setIsRoomSelectorOpen(true)} className="flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-all border border-slate-200">
-            <Settings size={14} /> Filter
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowDebug(!showDebug)}
+            className={`p-2 rounded-xl transition-all ${showDebug ? 'bg-amber-100 text-amber-600 ring-2 ring-amber-200' : 'bg-white text-slate-400 hover:text-slate-600 shadow-sm border border-slate-200'}`}
+          >
+            <Bug className="w-5 h-5" />
           </button>
-          <button onClick={fetchPCOData} disabled={isLoading} className={`p-2 rounded-lg ${isLoading ? 'animate-spin text-indigo-500' : 'text-slate-400 hover:text-indigo-600'}`}>
-            <RefreshCw size={18} />
-          </button>
+          <div className="text-right hidden sm:block">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Last Updated</p>
+            <p className="text-xs font-mono text-slate-600">{lastUpdated?.toLocaleTimeString() || '--:--'}</p>
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden flex flex-col relative">
-        {error && (
-          <div className="bg-red-50 border-b border-red-200 p-3 flex items-center justify-center gap-2 text-red-700 text-[10px] font-bold uppercase shrink-0 text-center">
-            <AlertCircle size={14} /> API Error: {error}
+      {/* Main Grid Section */}
+      <main className="max-w-7xl mx-auto relative bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden">
+        
+        {/* Time Shift Controls In-Grid */}
+        <div className="absolute top-0 left-0 z-40 bg-slate-900 text-white p-4 flex flex-col items-center justify-center border-b border-slate-800 h-20 w-48 shrink-0">
+          <div className="flex items-center gap-2 mb-1">
+            <button onClick={() => shiftTime(-1)} className="p-1 hover:bg-white/10 rounded"><ChevronLeft size={16}/></button>
+            <span className="text-[10px] font-black tracking-tighter opacity-70">SHIFT WINDOW</span>
+            <button onClick={() => shiftTime(1)} className="p-1 hover:bg-white/10 rounded"><ChevronRight size={16}/></button>
           </div>
-        )}
-
-        <div className="bg-white border-b border-slate-200 p-4 flex flex-wrap items-center gap-4 shrink-0">
-          <div className="relative flex-1 min-w-[280px]">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search..." 
-              className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm font-medium focus:ring-2 focus:ring-indigo-100 transition-all"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div className="flex gap-2">
-            {categories.map(cat => (
-              <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all ${selectedCategory === cat ? 'bg-indigo-600 text-white shadow-md border-indigo-600' : 'bg-white text-slate-500 hover:bg-slate-50 border-slate-200'}`}>
-                {cat}
-              </button>
-            ))}
-          </div>
-          <button onClick={() => setShowDebug(!showDebug)} className={`ml-auto p-2 rounded-lg border transition-all ${showDebug ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-slate-200 text-slate-400 hover:text-indigo-600'}`}>
-            <Bug size={20} />
-          </button>
+          <span className="text-xs font-bold text-blue-400">
+            {startHour % 12 || 12}{startHour >= 12 ? 'PM' : 'AM'} — {(startHour + 8) % 12 || 12}{(startHour + 8) % 24 >= 12 ? 'PM' : 'AM'}
+          </span>
         </div>
 
-        <div className="flex-1 flex overflow-hidden bg-slate-200/40">
-          <div className="flex-1 flex flex-col p-6 overflow-hidden">
-            <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-1">
-              <div className="w-64 shrink-0 bg-slate-50/50 border-r border-slate-200 flex flex-col">
-                <div className="h-14 border-b border-slate-200 flex items-center justify-between px-4 bg-slate-100/50">
-                    <div className="flex flex-col">
-                        <span className="uppercase tracking-widest text-[9px] font-black text-slate-400 leading-none">Rooms</span>
-                        <span className="text-[10px] font-bold text-slate-600 mt-1 whitespace-nowrap">
-                            {formatHour(viewStartHour)} — {formatHour(viewStartHour + visibleHoursCount)}
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
-                        <button onClick={() => shiftTime(-1)} disabled={viewStartHour === 0} className="p-1 hover:bg-slate-50 rounded text-slate-600 disabled:opacity-20 transition-all"><ArrowLeft size={14} /></button>
-                        <button onClick={() => shiftTime(1)} disabled={viewStartHour >= 24 - visibleHoursCount} className="p-1 hover:bg-slate-50 rounded text-slate-600 disabled:opacity-20 transition-all"><ArrowRight size={14} /></button>
-                    </div>
-                </div>
-                <div className="flex-1 overflow-y-auto scrollbar-hide">
-                  {filteredRooms.map(room => (
-                    <div key={room.id} className="h-28 border-b border-slate-100 px-6 flex flex-col justify-center bg-white/50">
-                      <span className="font-extrabold text-slate-800 text-sm leading-tight">{room.displayName}</span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[9px] font-bold bg-white border px-1.5 py-0.5 rounded text-slate-500 uppercase">{room.category}</span>
-                        <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1"><Users size={10}/> {room.capacity}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        <div className="overflow-x-auto select-none" ref={scrollContainerRef}>
+          <div className="min-w-[1000px]">
+            {/* Timeline Header */}
+            <div className="flex border-b border-slate-100 bg-slate-50/50">
+              <div className="w-48 p-4 shrink-0 font-bold text-slate-400 text-xs uppercase tracking-widest border-r border-slate-100 h-20 flex items-end">
+                Resources
               </div>
-
-              <div className="flex-1 flex flex-col overflow-hidden relative">
-                  <div className="flex h-14 border-b border-slate-200 bg-white z-20">
-                    {viewHours.map(hour => (
-                      <div key={hour} className="flex-1 border-r border-slate-100 flex items-center justify-center bg-slate-50/30 overflow-hidden">
-                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-tighter">{formatHour(hour)}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex-1 relative overflow-hidden bg-white">
-                    {nowPos !== null && (
-                      <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 shadow-[0_0_10px_rgba(239,68,68,0.5)] flex flex-col items-center pointer-events-none" style={{ left: `${nowPos}%` }}>
-                        <div className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm mt-2 whitespace-nowrap uppercase tracking-tighter shadow-sm transform -translate-x-1/2">NOW</div>
-                      </div>
-                    )}
-
-                    {filteredRooms.map(room => (
-                      <div key={room.id} className="flex h-28 border-b border-slate-100 relative group overflow-hidden">
-                        {viewHours.map(h => <div key={h} className="flex-1 border-r border-slate-50/50 group-hover:bg-slate-50/30 transition-colors"></div>)}
-                        
-                        {bookings
-                          .filter(b => b.roomId === room.id)
-                          .map(b => {
-                            const startObj = new Date(b.start);
-                            const endObj = new Date(b.end);
-                            const startDecimal = startObj.getHours() + (startObj.getMinutes() / 60);
-                            const endDecimal = endObj.getHours() + (endObj.getMinutes() / 60);
-                            const windowEnd = viewStartHour + visibleHoursCount;
-
-                            if (endDecimal < viewStartHour || startDecimal > windowEnd) return null;
-
-                            const clippedStart = Math.max(viewStartHour, startDecimal);
-                            const clippedEnd = Math.min(windowEnd, endDecimal);
-                            const leftPercent = ((clippedStart - viewStartHour) / visibleHoursCount) * 100;
-                            const widthPercent = ((clippedEnd - clippedStart) / visibleHoursCount) * 100;
-
-                            return (
-                              <div key={b.id} className="absolute top-4 h-20 rounded-2xl border-l-4 border-l-indigo-500 bg-white shadow-lg p-3 overflow-hidden border border-slate-100 z-10 hover:-translate-y-1 transition-all" style={{ left: `${leftPercent}%`, width: `calc(${widthPercent}% - 8px)` }}>
-                                <div className="font-extrabold text-[11px] text-slate-800 truncate mb-1">{b.title}</div>
-                                <div className="text-[9px] text-slate-500 font-bold flex items-center gap-1.5 uppercase">
-                                  <Clock size={10} className="text-indigo-400" /> {startObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    ))}
-                  </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {isRoomSelectorOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
-              <div className="p-6 border-b flex items-center justify-between bg-slate-50">
-                <h3 className="font-black text-slate-800 uppercase tracking-tight">Display Filter</h3>
-                <button onClick={() => setIsRoomSelectorOpen(false)} className="p-2 hover:bg-white rounded-full"><X size={20}/></button>
-              </div>
-              <div className="flex-1 overflow-auto p-4 space-y-2 bg-white">
-                {INITIAL_ROOMS.map(room => (
-                  <button key={room.id} onClick={() => {
-                    const newIds = selectedRoomIds.includes(room.id) 
-                      ? selectedRoomIds.filter(id => id !== room.id)
-                      : [...selectedRoomIds, room.id];
-                    setSelectedRoomIds(newIds);
-                  }} className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${selectedRoomIds.includes(room.id) ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}>
-                    <div className="text-left"><p className="font-bold text-sm">{room.displayName}</p></div>
-                    {selectedRoomIds.includes(room.id) && <Check size={18} className="text-indigo-600" />}
-                  </button>
-                ))}
-              </div>
-              <div className="p-6 bg-slate-50 border-t">
-                <button onClick={() => setIsRoomSelectorOpen(false)} className="flex-1 w-full py-3 bg-indigo-600 text-white font-black rounded-xl text-xs uppercase shadow-lg">Done</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showDebug && (
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-amber-200 z-[100] h-80 overflow-hidden shadow-2xl flex flex-col p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-slate-800 font-black uppercase flex items-center gap-2"><Bug size={20} className="text-amber-600" /> PCO Resource Discovery</h3>
-              <button onClick={() => setShowDebug(false)}><X size={20}/></button>
-            </div>
-            <p className="text-[10px] text-slate-400 uppercase font-black mb-4">Copy these IDs into INITIAL_ROOMS mapping</p>
-            <div className="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 gap-3">
-              {apiResources.length > 0 ? apiResources.map((res, i) => {
-                const isMapped = INITIAL_ROOMS.some(r => r.pcoResourceId === res.id);
-                return (
-                  <div key={i} className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex items-center justify-between shadow-sm">
-                    <div className="flex flex-col overflow-hidden">
-                        <span className="text-[11px] font-black text-slate-800 truncate">{res.attributes.name}</span>
-                        <code className="text-[10px] font-mono text-indigo-500">ID: {res.id}</code>
-                    </div>
-                    <span className={`text-[8px] font-black uppercase px-2 py-1 rounded ${isMapped ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                        {isMapped ? 'Mapped' : 'Unmapped'}
+              <div className="flex-1 flex relative h-20 items-end">
+                {hours.map((hour) => (
+                  <div key={hour} className="flex-1 border-l border-slate-100/50 p-4 text-center">
+                    <span className="text-sm font-black text-slate-400 tracking-tighter">
+                      {hour % 12 || 12}
+                      <span className="text-[10px] ml-0.5 opacity-60">{hour >= 12 ? 'PM' : 'AM'}</span>
                     </span>
                   </div>
-                );
-              }) : (
-                <p className="text-xs text-slate-400 italic col-span-2 text-center py-10">No rooms found in API response. Ensure credentials are correct and you've redeployed.</p>
-              )}
+                ))}
+              </div>
+            </div>
+
+            {/* Room Rows */}
+            <div className="relative">
+              {INITIAL_ROOMS.map((room) => (
+                <div key={room.id} className="flex border-b border-slate-50 group hover:bg-slate-50/30 transition-colors">
+                  <div className="w-48 p-5 shrink-0 border-r border-slate-100 bg-white group-hover:bg-slate-50/50 transition-colors">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full text-white uppercase tracking-wider ${CATEGORY_COLORS[room.category]}`}>
+                        {room.category}
+                      </span>
+                      <div className="flex items-center gap-1 text-slate-300">
+                        <Users size={10} />
+                        <span className="text-[10px] font-bold">{room.capacity}</span>
+                      </div>
+                    </div>
+                    <h3 className="font-bold text-slate-800 leading-tight">{room.displayName}</h3>
+                  </div>
+
+                  <div className="flex-1 flex relative py-3 min-h-[85px]">
+                    {/* Hour Markers */}
+                    {hours.map((h) => (
+                      <div key={h} className="flex-1 border-l border-slate-100/30 first:border-0" />
+                    ))}
+                    
+                    {/* Events */}
+                    {events
+                      .filter(e => e.resourceId === room.pcoResourceId && room.pcoResourceId !== "")
+                      .map((event, idx) => (
+                        <div
+                          key={event.id || idx}
+                          style={getEventStyle(event)}
+                          className={`absolute h-[calc(100%-1.5rem)] rounded-xl p-3 shadow-sm border-l-4 border-white/20 transition-all hover:scale-[1.01] hover:z-20 cursor-default flex flex-col justify-center overflow-hidden ${CATEGORY_COLORS[room.category] || 'bg-blue-500'} text-white`}
+                        >
+                          <p className="text-xs font-black leading-tight mb-0.5 truncate drop-shadow-sm">
+                            {event.title}
+                          </p>
+                          <div className="flex items-center gap-2 opacity-90">
+                            <div className="flex items-center gap-0.5 text-[9px] font-bold">
+                              <Clock size={8} />
+                              {new Date(event.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              ))}
+              <NowIndicator />
             </div>
           </div>
-        )}
+        </div>
       </main>
+
+      {/* Debug/Setup Panel */}
+      {showDebug && (
+        <div className="max-w-7xl mx-auto mt-6 bg-white rounded-2xl border-2 border-amber-200 overflow-hidden shadow-xl animate-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-amber-50 p-4 border-b border-amber-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bug className="text-amber-600 w-5 h-5" />
+              <h2 className="font-black text-amber-900 tracking-tight">RESOURCE DISCOVERY MODE</h2>
+            </div>
+            <button onClick={() => setShowDebug(false)} className="p-1 hover:bg-amber-200 rounded-lg text-amber-600 transition-colors">
+              <ChevronLeft className="w-5 h-5 rotate-90" />
+            </button>
+          </div>
+          <div className="p-6">
+            {!debugData ? (
+              <div className="text-center py-8">
+                <RefreshCw className="w-8 h-8 text-amber-400 animate-spin mx-auto mb-4" />
+                <p className="text-slate-600 font-medium">Fetching available resources from PCO...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {debugData.map(res => {
+                  const isMapped = INITIAL_ROOMS.some(r => r.pcoResourceId === res.id);
+                  return (
+                    <div key={res.id} className={`p-4 rounded-xl border-2 transition-all ${isMapped ? 'border-green-100 bg-green-50/30' : 'border-slate-100 hover:border-amber-200'}`}>
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] font-mono bg-slate-900 text-white px-2 py-0.5 rounded tracking-tighter">ID: {res.id}</span>
+                        {isMapped ? <CheckCircle2 size={16} className="text-green-500" /> : <AlertCircle size={16} className="text-amber-500" />}
+                      </div>
+                      <p className="font-bold text-slate-800 mb-1">{res.name}</p>
+                      <p className="text-[10px] text-slate-500 truncate mb-3">{res.path}</p>
+                      <button 
+                        onClick={() => navigator.clipboard.writeText(res.id)}
+                        className="w-full py-1.5 text-[10px] font-black uppercase bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+                      >
+                        Copy ID
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Footer Info */}
+      <footer className="max-w-7xl mx-auto mt-8 flex items-center justify-center gap-6 opacity-40 grayscale hover:grayscale-0 transition-all duration-500">
+         <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+            <span className="text-[10px] font-bold tracking-widest uppercase">System Operational</span>
+         </div>
+         <span className="text-[10px] font-medium tracking-tighter">FGAM IT Operations Room Display v3.0</span>
+      </footer>
     </div>
   );
 };
 
-export default App;
+export default Dashboard;
