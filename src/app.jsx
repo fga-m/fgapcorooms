@@ -1,7 +1,6 @@
 /* eslint-disable */
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Calendar as CalendarIcon, 
   Search, 
   ChevronLeft, 
   ChevronRight, 
@@ -20,18 +19,14 @@ import {
 } from 'lucide-react';
 
 /**
- * PCO ROOM AVAILABILITY DASHBOARD - LIVE API VERSION
- * * SETUP INSTRUCTIONS:
- * 1. Add PCO_APP_ID and PCO_SECRET to Vercel Environment Variables.
- * 2. Deploy the code.
- * 3. Open the "Bug" icon on the dashboard to see your actual PCO Resource IDs.
- * 4. Update the 'pcoResourceId' values in INITIAL_ROOMS below.
+ * PCO ROOM AVAILABILITY DASHBOARD - API VERSION
+ * CLEAN VERSION: Removed unused imports to prevent Vercel build failure.
  */
 
 const INITIAL_ROOMS = [
   { 
     id: 'r1', 
-    pcoResourceId: '', // Enter ID from Bug menu
+    pcoResourceId: '', // Enter ID from Bug discovery menu
     displayName: 'Sanctuary', 
     category: 'Worship', 
     capacity: 450 
@@ -40,29 +35,43 @@ const INITIAL_ROOMS = [
     id: 'r2', 
     pcoResourceId: '', 
     displayName: 'Lobby', 
-    category: 'Youth', 
+    category: 'General', 
     capacity: 120 
   },
   { 
     id: 'r3', 
     pcoResourceId: '', 
     displayName: 'Zoom', 
-    category: 'Admin', 
-    capacity: 15 
+    category: 'Digital', 
+    capacity: 100 
   },
   { 
     id: 'r4', 
     pcoResourceId: '', 
     displayName: 'Zoom 2', 
-    category: 'Kids', 
-    capacity: 80 
+    category: 'Digital', 
+    capacity: 100 
+  },
+  { 
+    id: 'r5', 
+    pcoResourceId: '', 
+    displayName: 'Zoom 3', 
+    category: 'Digital', 
+    capacity: 100 
+  },
+  { 
+    id: 'r6', 
+    pcoResourceId: '', 
+    displayName: 'Zoom 4', 
+    category: 'Digital', 
+    capacity: 100 
   },
   { 
     id: 'r7', 
     pcoResourceId: '', 
     displayName: 'Multipurpose Room', 
-    category: 'Tech', 
-    capacity: 8 
+    category: 'General', 
+    capacity: 50 
   },
 ];
 
@@ -86,7 +95,6 @@ const App = () => {
   const fetchPCOData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-
     const dateStr = currentDate.toISOString().split('T')[0];
 
     try {
@@ -95,11 +103,9 @@ const App = () => {
 
       if (!response.ok) throw new Error(result.error || 'Failed to fetch API data');
 
-      // Filter resources from the 'included' array for the discovery menu
       const rawResources = (result.included || []).filter(item => item.type === 'Resource');
       setApiResources(rawResources);
 
-      // Map API Bookings to our local state
       const mappedBookings = (result.data || []).map(booking => {
         const resourceId = booking.relationships?.resource?.data?.id;
         const room = INITIAL_ROOMS.find(r => r.pcoResourceId === resourceId);
@@ -107,7 +113,6 @@ const App = () => {
         return {
           id: booking.id,
           roomId: room ? room.id : null,
-          pcoResourceId: resourceId,
           title: booking.attributes.event_name || "Untitled Event",
           start: booking.attributes.starts_at,
           end: booking.attributes.ends_at,
@@ -117,7 +122,6 @@ const App = () => {
       setBookings(mappedBookings);
       setLastUpdated(new Date());
     } catch (err) {
-      console.error(err);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -175,7 +179,7 @@ const App = () => {
             <div className="flex items-center gap-2 mt-0.5">
               <div className={`h-2 w-2 rounded-full ${bookings.length > 0 ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`}></div>
               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1">
-                {bookings.filter(b => b.roomId).length} Linked Rooms
+                {bookings.filter(b => b.roomId).length} Linked
                 {lastUpdated && <span className="opacity-50 ml-1">· {lastUpdated.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>}
               </p>
             </div>
@@ -216,7 +220,7 @@ const App = () => {
       <main className="flex-1 overflow-hidden flex flex-col relative">
         {error && (
           <div className="bg-red-50 border-b border-red-200 p-3 flex items-center justify-center gap-2 text-red-700 text-[10px] font-bold uppercase shrink-0 text-center">
-            <AlertCircle size={14} /> API Configuration Error: {error}
+            <AlertCircle size={14} /> API Error: {error}
           </div>
         )}
 
@@ -225,7 +229,7 @@ const App = () => {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
               type="text" 
-              placeholder="Search active rooms..." 
+              placeholder="Search..." 
               className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm font-medium focus:ring-2 focus:ring-indigo-100 transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -249,7 +253,7 @@ const App = () => {
               <div className="w-64 shrink-0 bg-slate-50/50 border-r border-slate-200 flex flex-col">
                 <div className="h-14 border-b border-slate-200 flex items-center justify-between px-4 bg-slate-100/50">
                     <div className="flex flex-col">
-                        <span className="uppercase tracking-widest text-[9px] font-black text-slate-400 leading-none">Resources</span>
+                        <span className="uppercase tracking-widest text-[9px] font-black text-slate-400 leading-none">Rooms</span>
                         <span className="text-[10px] font-bold text-slate-600 mt-1 whitespace-nowrap">
                             {formatHour(viewStartHour)} — {formatHour(viewStartHour + visibleHoursCount)}
                         </span>
@@ -360,7 +364,7 @@ const App = () => {
             </div>
             <p className="text-[10px] text-slate-400 uppercase font-black mb-4">Copy these IDs into INITIAL_ROOMS mapping</p>
             <div className="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 gap-3">
-              {apiResources.map((res, i) => {
+              {apiResources.length > 0 ? apiResources.map((res, i) => {
                 const isMapped = INITIAL_ROOMS.some(r => r.pcoResourceId === res.id);
                 return (
                   <div key={i} className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex items-center justify-between shadow-sm">
@@ -373,7 +377,9 @@ const App = () => {
                     </span>
                   </div>
                 );
-              })}
+              }) : (
+                <p className="text-xs text-slate-400 italic col-span-2 text-center py-10">No rooms found in API response. Ensure credentials are correct and you've redeployed.</p>
+              )}
             </div>
           </div>
         )}
