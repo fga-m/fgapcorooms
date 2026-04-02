@@ -24,7 +24,8 @@ import {
 
 /**
  * PCO CALENDAR DASHBOARD - DIAGNOSTIC FEED VERSION
- * * This version adds a "Live Feed" to see raw event data regardless of room mapping.
+ * 1. Switch to 'Feed' view to see raw event data from PCO.
+ * 2. If events show in the Feed but not the Grid, copy the IDs to the 'pcoRoomId' below.
  */
 
 const INITIAL_ROOMS = [
@@ -73,7 +74,9 @@ const App = () => {
       const response = await fetch(`/api/calendar?date=${dateString}`);
       const result = await response.json();
       
-      if (!response.ok) throw new Error(result.error || 'Connection Failed');
+      if (!response.ok) {
+          throw new Error(result.error || `Connection Failed (${response.status})`);
+      }
       
       setApiRooms(result.rooms || []);
 
@@ -103,6 +106,7 @@ const App = () => {
       setBookings(mappedBookings);
       setLastUpdated(new Date());
     } catch (err) {
+      console.error("Dashboard Error:", err);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -111,8 +115,6 @@ const App = () => {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 300000);
-    return () => clearInterval(interval);
   }, [fetchData]);
 
   const shiftTime = (amount) => {
@@ -166,7 +168,7 @@ const App = () => {
           <div>
             <h1 className="text-xl font-black uppercase tracking-tight italic text-slate-800 leading-none">FGAM Calendar</h1>
             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2 mt-1.5">
-              {bookings.length} Total Instances (7 Days)
+              {bookings.length} Events Synced
               {lastUpdated && <span className="opacity-40">· {lastUpdated.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>}
             </p>
           </div>
@@ -206,8 +208,8 @@ const App = () => {
       <main className="flex-1 overflow-hidden flex flex-col relative">
         {error && (
           <div className="bg-rose-50 border-b border-rose-100 p-4 flex flex-col items-center justify-center gap-1 text-rose-800 shrink-0">
-            <div className="flex items-center gap-2 text-[10px] font-black uppercase"><AlertCircle size={14} /> Connection Status</div>
-            <p className="text-[10px] font-bold opacity-80">{error}</p>
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase"><AlertCircle size={14} /> System Error</div>
+            <p className="text-[10px] font-bold text-center max-w-lg leading-relaxed italic opacity-80">{error}</p>
           </div>
         )}
 
@@ -278,7 +280,7 @@ const App = () => {
                   <h2 className="text-sm font-black text-indigo-900 uppercase tracking-widest">Diagnostic Mode: Live API Feed</h2>
                   <p className="text-[11px] text-indigo-700/70 font-medium leading-relaxed mt-1">
                     Below is EVERY event Planning Center is sending back for the next 7 days. 
-                    If you see events here but not in the grid, the issue is with the <b>Room ID mapping</b>.
+                    Switch here to confirm the connection is working.
                   </p>
                 </div>
               </div>
@@ -295,7 +297,7 @@ const App = () => {
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5">
                                 <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Clock size={12} className="text-indigo-500" /> {new Date(b.start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                 <span className="text-[10px] font-black text-indigo-500 uppercase flex items-center gap-1.5">
-                                    <Users size={12} /> {b.roomNames.length > 0 ? b.roomNames.join(', ') : 'No Room Specified'}
+                                    <Users size={12} /> {b.roomNames.length > 0 ? b.roomNames.join(', ') : 'No Room'}
                                 </span>
                             </div>
                         </div>
@@ -304,7 +306,6 @@ const App = () => {
                         {b.pcoRoomIds.map(rid => (
                             <code key={rid} className="text-[9px] font-mono bg-slate-100 px-2 py-1 rounded text-slate-500">ID: {rid}</code>
                         ))}
-                        {b.pcoRoomIds.length === 0 && <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest bg-rose-50 px-2 py-1 rounded">Unmapped</span>}
                     </div>
                 </div>
               )) : (
@@ -318,18 +319,46 @@ const App = () => {
         )}
       </main>
 
-      {/* Discovery Menu (Bug Menu) */}
+      {/* Room Visibility Modal */}
+      {isRoomSelectorOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="p-8 border-b flex items-center justify-between bg-slate-50">
+              <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Visibility Settings</h3>
+              <button onClick={() => setIsRoomSelectorOpen(false)} className="p-2 hover:bg-white rounded-full text-slate-400 hover:text-slate-600 transition-colors"><X size={20}/></button>
+            </div>
+            <div className="flex-1 overflow-auto p-6 space-y-2 bg-white">
+              {INITIAL_ROOMS.map(room => (
+                <button key={room.id} onClick={() => {
+                  const newIds = selectedRoomIds.includes(room.id) 
+                    ? selectedRoomIds.filter(id => id !== room.id)
+                    : [...selectedRoomIds, room.id];
+                  setSelectedRoomIds(newIds);
+                }} className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${selectedRoomIds.includes(room.id) ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}>
+                  <div className="text-left font-black text-xs uppercase tracking-tight">{room.displayName}</div>
+                  {selectedRoomIds.includes(room.id) && <div className="bg-indigo-600 p-1 rounded-full text-white"><Check size={12} strokeWidth={4} /></div>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Discovery Menu */}
       {showDebug && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-amber-400 z-[100] h-96 overflow-hidden shadow-2xl flex flex-col p-8 animate-in slide-in-from-bottom-full duration-500">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="font-black text-amber-900 uppercase text-xs flex items-center gap-3"><Bug size={18} className="text-amber-500"/> Calendar ID Discovery</h2>
+            <div className="flex flex-col">
+                <h2 className="font-black text-amber-900 uppercase text-xs flex items-center gap-3"><Bug size={18} className="text-amber-500"/> Calendar ID Discovery</h2>
+                <p className="text-[9px] font-bold text-amber-600/70 uppercase tracking-widest mt-1 italic">Copy these IDs to INITIAL_ROOMS array</p>
+            </div>
             <button onClick={() => setShowDebug(false)} className="text-amber-500 font-black hover:text-amber-700 text-xs uppercase">Close</button>
           </div>
           <div className="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-8">
             {apiRooms.length > 0 ? apiRooms.map(res => (
               <div key={res.id} className="p-4 rounded-2xl border-2 border-slate-100 bg-white flex items-center justify-between hover:border-amber-100 transition-all shadow-sm">
                 <div className="overflow-hidden pr-4">
-                  <p className="font-black text-[11px] text-slate-800 truncate uppercase">{res.attributes?.name || 'Unnamed'}</p>
+                  <p className="font-black text-[11px] text-slate-800 truncate uppercase tracking-tight leading-none">{res.attributes?.name || 'Unnamed'}</p>
                   <code className="text-[10px] font-mono text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded mt-2 inline-block">ID: {res.id}</code>
                 </div>
                 <button onClick={() => { navigator.clipboard.writeText(res.id); alert(`ID ${res.id} copied!`); }} className="p-2.5 bg-slate-50 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 text-slate-400 hover:text-indigo-600 transition-all shadow-sm"><CheckCircle2 size={18}/></button>
@@ -340,7 +369,7 @@ const App = () => {
                       <ShieldAlert className="mx-auto text-amber-500 mb-2" size={32} />
                       <p className="text-[10px] font-black uppercase text-amber-900">API Connection Offline</p>
                       <p className="text-[10px] text-amber-700/80 font-medium italic mt-2 leading-relaxed">
-                          The dashboard is failing to fetch room definitions (404). This version has bypassed that crash so you can still see events in the "Feed" view.
+                          The grid cannot fetch room definitions. Use the "Feed" view to check for incoming event data.
                       </p>
                   </div>
               </div>
