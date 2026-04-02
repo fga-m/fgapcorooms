@@ -236,14 +236,36 @@ const App = () => {
                     <button onClick={() => shiftTime(1)} disabled={viewStartHour >= 24 - visibleHoursCount} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowRight size={12} /></button>
                   </div>
                 </div>
-                <div className="flex flex-1 bg-white">
-                  {Array.from({ length: visibleHoursCount }, (_, i) => viewStartHour + i).map(hour => (
-                    <div key={hour} className="flex-1 border-r border-slate-100 h-12 flex items-center justify-center text-[10px] font-black text-slate-400 uppercase italic">
-                      {hour % 12 || 12}{hour >= 12 ? 'PM' : 'AM'}
-                    </div>
-                  ))}
-                </div>
-              </div>
+                <div
+  className="flex flex-1 bg-white cursor-grab active:cursor-grabbing select-none"
+  onMouseDown={(e) => {
+    const startX = e.clientX;
+    const startHour = viewStartHour;
+    const headerWidth = e.currentTarget.getBoundingClientRect().width;
+    const hoursPerPixel = visibleHoursCount / headerWidth;
+
+    const onMove = (moveEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const hourDelta = -(dx * hoursPerPixel);
+      const newHour = Math.round(startHour + hourDelta);
+      setViewStartHour(Math.max(0, Math.min(24 - visibleHoursCount, newHour)));
+    };
+
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }}
+>
+  {Array.from({ length: visibleHoursCount }, (_, i) => viewStartHour + i).map(hour => (
+    <div key={hour} className="flex-1 border-r border-slate-100 h-12 flex items-center justify-center text-[10px] font-black text-slate-400 uppercase italic pointer-events-none">
+      {hour % 12 || 12}{hour >= 12 ? 'PM' : 'AM'}
+    </div>
+  ))}
+</div>
 
               {/* Scrollable body */}
               <div className="flex overflow-y-auto scrollbar-hide" style={{ height: 'calc(100% - 3rem)' }}>
