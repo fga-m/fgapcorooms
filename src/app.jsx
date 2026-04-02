@@ -1,26 +1,9 @@
 /* eslint-disable */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Clock, 
-  Users, 
-  AlertCircle, 
-  Bug, 
-  RefreshCw,
-  Zap,
-  RotateCcw,
-  CheckCircle2,
-  Search,
-  Settings,
-  X,
-  Check,
-  ArrowLeft,
-  ArrowRight,
-  ShieldAlert,
-  ListFilter,
-  LayoutGrid,
-  FileCode
+import {
+  ChevronLeft, ChevronRight, Clock, Users, AlertCircle, Bug, RefreshCw,
+  Zap, RotateCcw, CheckCircle2, ArrowLeft, ArrowRight, ShieldAlert,
+  ListFilter, LayoutGrid, FileCode
 } from 'lucide-react';
 
 const INITIAL_ROOMS = [
@@ -33,7 +16,7 @@ const INITIAL_ROOMS = [
   { id: 'r7', pcoRoomId: 'Level 2 – Meeting Room 5', displayName: 'Meeting Room 5', category: 'General', capacity: 20 },
   { id: 'r8', pcoRoomId: 'Level 1 – Large Meeting Room', displayName: 'Large Meeting Room', category: 'General', capacity: 30 },
   { id: 'r9', pcoRoomId: 'Level 1 – Open Office Area', displayName: 'Open Office Area', category: 'Admin', capacity: 15 },
-  { id: 'r10', pcoRoomId: 'Level 1 – Chris\' Office', displayName: 'Chris\' Office', category: 'Admin', capacity: 5 },
+  { id: 'r10', pcoRoomId: "Level 1 – Chris' Office", displayName: "Chris' Office", category: 'Admin', capacity: 5 },
   { id: 'r11', pcoRoomId: 'Level 1 – Staff Kitchen', displayName: 'Staff Kitchen', category: 'General', capacity: 10 },
   { id: 'r12', pcoRoomId: '/zoom', displayName: 'Zoom 1', category: 'Digital', capacity: 100 },
   { id: 'r13', pcoRoomId: '/zoom3', displayName: 'Zoom 3', category: 'Digital', capacity: 100 },
@@ -49,13 +32,29 @@ const CATEGORY_COLORS = {
   Digital: 'bg-indigo-600'
 };
 
+const TZ = 'Australia/Melbourne';
+
+// Get decimal hour (e.g. 14.5 = 2:30pm) in Melbourne time from a date
+const getMelbHour = (date) => {
+  const d = new Date(date);
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: TZ, hour: 'numeric', minute: 'numeric', hour12: false
+  }).formatToParts(d);
+  const h = parseInt(parts.find(p => p.type === 'hour').value);
+  const m = parseInt(parts.find(p => p.type === 'minute').value);
+  return h + m / 60;
+};
+
+// Get YYYY-MM-DD in Melbourne time
+const getMelbDate = (date) => {
+  return new Date(date).toLocaleDateString('en-AU', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+};
+
 const App = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewStartHour, setViewStartHour] = useState(8);
   const [activeView, setActiveView] = useState('grid');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedRoomIds, setSelectedRoomIds] = useState(INITIAL_ROOMS.map(r => r.id));
+  const [selectedRoomIds] = useState(INITIAL_ROOMS.map(r => r.id));
   const [lastUpdated, setLastUpdated] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [apiRooms, setApiRooms] = useState([]);
@@ -69,26 +68,23 @@ const App = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const dateString = currentDate.toISOString().split('T')[0];
+      // Use Melbourne date for the API call
+      const dateString = new Date(currentDate).toLocaleDateString('en-CA', { timeZone: TZ });
       const response = await fetch(`/api/calendar?date=${dateString}`);
       const result = await response.json();
 
-      if (!response.ok) {
-        throw new Error(result.error || `Server Error ${response.status}`);
-      }
+      if (!response.ok) throw new Error(result.error || `Server Error ${response.status}`);
 
       setApiRooms(result.rooms || []);
 
       const mappedBookings = (result.instances || []).map(instance => {
         const eventId = instance.relationships?.event?.data?.id;
         const eventData = (result.included || []).find(inc => inc.type === 'Event' && inc.id === eventId);
-
         return {
           id: instance.id,
           title: eventData?.attributes?.name || instance.attributes?.name || "Untitled Event",
           start: instance.attributes?.starts_at,
           end: instance.attributes?.ends_at,
-          pcoRoomIds: instance.resolvedRooms || [],
           roomNames: instance.resolvedRooms || []
         };
       });
@@ -102,9 +98,7 @@ const App = () => {
     }
   }, [currentDate]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const shiftTime = (amount) => {
     setViewStartHour(prev => Math.max(0, Math.min(24 - visibleHoursCount, prev + amount)));
@@ -113,41 +107,35 @@ const App = () => {
   const resetToToday = () => {
     const now = new Date();
     setCurrentDate(now);
-    setViewStartHour(Math.max(0, Math.min(16, now.getHours() - 1)));
+    setViewStartHour(Math.max(0, Math.min(16, Math.floor(getMelbHour(now)) - 1)));
   };
 
-  const filteredRooms = INITIAL_ROOMS.filter(room => {
-    const matchesSearch = room.displayName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'All' || room.category === selectedCategory;
-    const isVisible = selectedRoomIds.includes(room.id);
-    return matchesSearch && matchesCategory && isVisible;
-  });
-
+  // Get event position/width as % within the visible time window, all in Melbourne time
   const getEventStyle = (event) => {
-    const start = new Date(event.start);
-    const end = new Date(event.end);
-    const viewStart = new Date(currentDate);
-    viewStart.setHours(viewStartHour, 0, 0, 0);
-    const viewEnd = new Date(currentDate);
-    viewEnd.setHours(viewStartHour + visibleHoursCount, 0, 0, 0);
-
-    const effectiveStart = Math.max(start, viewStart);
-    const effectiveEnd = Math.min(end, viewEnd);
+    const startHour = getMelbHour(event.start);
+    const endHour = getMelbHour(event.end);
+    const effectiveStart = Math.max(startHour, viewStartHour);
+    const effectiveEnd = Math.min(endHour, viewStartHour + visibleHoursCount);
     if (effectiveEnd <= effectiveStart) return { display: 'none' };
-
-    const left = ((effectiveStart - viewStart) / (visibleHoursCount * 3600000)) * 100;
-    const width = ((effectiveEnd - effectiveStart) / (visibleHoursCount * 3600000)) * 100;
-
+    const left = ((effectiveStart - viewStartHour) / visibleHoursCount) * 100;
+    const width = ((effectiveEnd - effectiveStart) / visibleHoursCount) * 100;
     return { left: `${left}%`, width: `${width}%` };
   };
 
+  // NOW line as % within the visible time window
   const nowPos = useMemo(() => {
     const now = new Date();
-    if (now.toDateString() !== currentDate.toDateString()) return null;
-    const hour = now.getHours() + (now.getMinutes() / 60);
+    const todayMelb = getMelbDate(now);
+    const currentMelb = getMelbDate(currentDate);
+    if (todayMelb !== currentMelb) return null;
+    const hour = getMelbHour(now);
     if (hour < viewStartHour || hour > viewStartHour + visibleHoursCount) return null;
     return ((hour - viewStartHour) / visibleHoursCount) * 100;
   }, [currentDate, viewStartHour]);
+
+  const filteredRooms = INITIAL_ROOMS.filter(room => selectedRoomIds.includes(room.id));
+
+  const currentDateMelb = getMelbDate(currentDate);
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -165,15 +153,13 @@ const App = () => {
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
-            <button onClick={() => {
-              const d = new Date(currentDate); d.setDate(d.getDate() - 1); setCurrentDate(d);
-            }} className="p-2 hover:bg-white rounded-xl transition-all"><ChevronLeft size={18} /></button>
+            <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() - 1); setCurrentDate(d); }}
+              className="p-2 hover:bg-white rounded-xl transition-all"><ChevronLeft size={18} /></button>
             <span className="px-4 font-black text-slate-700 min-w-[160px] text-center text-xs uppercase tracking-tight">
-              {currentDate.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+              {currentDate.toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short', day: 'numeric', month: 'short' })}
             </span>
-            <button onClick={() => {
-              const d = new Date(currentDate); d.setDate(d.getDate() + 1); setCurrentDate(d);
-            }} className="p-2 hover:bg-white rounded-xl transition-all"><ChevronRight size={18} /></button>
+            <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() + 1); setCurrentDate(d); }}
+              className="p-2 hover:bg-white rounded-xl transition-all"><ChevronRight size={18} /></button>
           </div>
           <button onClick={resetToToday} className="px-4 py-2 bg-white hover:bg-slate-50 text-indigo-600 rounded-2xl text-xs font-black uppercase border border-indigo-100 shadow-sm transition-all flex items-center gap-2">
             <RotateCcw size={14} /> Today
@@ -211,7 +197,7 @@ const App = () => {
           <div className="flex-1 flex overflow-hidden bg-slate-100/50 p-6">
             <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col">
 
-              {/* Fixed header row */}
+              {/* Fixed header */}
               <div className="flex shrink-0 border-b border-slate-200">
                 <div className="w-48 shrink-0 bg-slate-100/50 border-r border-slate-200 h-12 flex items-center justify-between px-4">
                   <span className="uppercase tracking-widest text-[9px] font-black text-slate-400">Rooms</span>
@@ -229,18 +215,8 @@ const App = () => {
                 </div>
               </div>
 
-              {/* Scrollable body — both columns scroll together */}
-              <div className="flex flex-1 overflow-y-auto scrollbar-hide relative">
-
-                {/* Now line */}
-                {nowPos !== null && (
-                  <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 shadow-[0_0_15px_rgba(239,68,68,0.4)] pointer-events-none"
-                    style={{ left: `calc(12rem + ${nowPos}% * (100% - 12rem) / 100)` }}
-                  >
-                    <div className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm mt-2 transform -translate-x-1/2 uppercase tracking-tighter shadow-sm">NOW</div>
-                  </div>
-                )}
+              {/* Scrollable body */}
+              <div className="flex flex-1 overflow-y-auto scrollbar-hide">
 
                 {/* Left: room labels */}
                 <div className="w-48 shrink-0 border-r border-slate-200 bg-slate-50/50">
@@ -255,8 +231,13 @@ const App = () => {
                   ))}
                 </div>
 
-                {/* Right: event grid */}
+                {/* Right: event grid with NOW line inside */}
                 <div className="flex-1 relative bg-white">
+                  {nowPos !== null && (
+                    <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 shadow-[0_0_15px_rgba(239,68,68,0.4)] pointer-events-none" style={{ left: `${nowPos}%` }}>
+                      <div className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm mt-2 transform -translate-x-1/2 uppercase tracking-tighter shadow-sm">NOW</div>
+                    </div>
+                  )}
                   {filteredRooms.map(room => (
                     <div key={room.id} className="flex h-16 border-b border-slate-100 relative group overflow-hidden">
                       {Array.from({ length: visibleHoursCount }).map((_, i) => (
@@ -265,14 +246,15 @@ const App = () => {
                       {bookings
                         .filter(b => {
                           if (!b.roomNames.includes(room.pcoRoomId) || room.pcoRoomId === "") return false;
-                          const eventDate = new Date(b.start).toLocaleDateString('en-AU', { timeZone: 'Australia/Melbourne' });
-                          const viewDate = currentDate.toLocaleDateString('en-AU', { timeZone: 'Australia/Melbourne' });
-                          return eventDate === viewDate;
+                          return getMelbDate(b.start) === currentDateMelb;
                         })
                         .map(b => (
                           <div key={b.id} style={getEventStyle(b)} className={`absolute top-1 h-14 rounded-xl p-2 shadow-lg border-l-4 border-white/30 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center ${CATEGORY_COLORS[room.category] || 'bg-indigo-600'}`}>
                             <p className="text-[9px] font-black truncate uppercase leading-tight drop-shadow-sm">{b.title}</p>
-                            <p className="text-[7px] font-bold opacity-80 uppercase mt-1 flex items-center gap-1"><Clock size={8} className="shrink-0" /> {new Date(b.start).toLocaleTimeString('en-AU', { timeZone: 'Australia/Melbourne', hour: 'numeric', minute: '2-digit' })}</p>
+                            <p className="text-[7px] font-bold opacity-80 uppercase mt-1 flex items-center gap-1">
+                              <Clock size={8} className="shrink-0" />
+                              {new Date(b.start).toLocaleTimeString('en-AU', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })}
+                            </p>
                           </div>
                         ))}
                     </div>
@@ -290,7 +272,6 @@ const App = () => {
                   <h2 className="text-sm font-black text-indigo-900 uppercase tracking-widest">Diagnostic Mode: Live API Feed</h2>
                   <p className="text-[11px] text-indigo-700/70 font-medium leading-relaxed mt-1">
                     Below is EVERY event Planning Center is sending back for the next 7 days.
-                    Switch here to confirm the connection is working.
                   </p>
                 </div>
               </div>
@@ -299,13 +280,16 @@ const App = () => {
                 <div key={b.id} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between gap-4 transition-all hover:shadow-md">
                   <div className="flex items-center gap-4 min-w-0">
                     <div className="w-16 h-16 bg-slate-50 rounded-2xl flex flex-col items-center justify-center border border-slate-100 shrink-0">
-                      <span className="text-[9px] font-black uppercase text-slate-400">{new Date(b.start).toLocaleDateString('en-AU', { timeZone: 'Australia/Melbourne', weekday: 'short' })}</span>
-                      <span className="text-lg font-black text-slate-800 leading-none">{new Date(b.start).toLocaleDateString('en-AU', { timeZone: 'Australia/Melbourne', day: 'numeric' })}</span>
+                      <span className="text-[9px] font-black uppercase text-slate-400">{new Date(b.start).toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short' })}</span>
+                      <span className="text-lg font-black text-slate-800 leading-none">{new Date(b.start).toLocaleDateString('en-AU', { timeZone: TZ, day: 'numeric' })}</span>
                     </div>
                     <div className="min-w-0">
                       <h3 className="font-black text-slate-800 text-sm uppercase tracking-tight truncate">{b.title}</h3>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5">
-                        <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Clock size={12} className="text-indigo-500" /> {new Date(b.start).toLocaleTimeString('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
+                          <Clock size={12} className="text-indigo-500" />
+                          {new Date(b.start).toLocaleTimeString('en-AU', { timeZone: TZ, hour: '2-digit', minute: '2-digit' })}
+                        </span>
                         <span className="text-[10px] font-black text-indigo-500 uppercase flex items-center gap-1.5">
                           <Users size={12} /> {b.roomNames.length > 0 ? b.roomNames.join(', ') : 'No Room'}
                         </span>
@@ -313,8 +297,8 @@ const App = () => {
                     </div>
                   </div>
                   <div className="shrink-0 flex flex-col items-end gap-2">
-                    {b.pcoRoomIds.map(rid => (
-                      <code key={rid} className="text-[9px] font-mono bg-slate-100 px-2 py-1 rounded text-slate-500">ID: {rid}</code>
+                    {b.roomNames.map(rid => (
+                      <code key={rid} className="text-[9px] font-mono bg-slate-100 px-2 py-1 rounded text-slate-500">{rid}</code>
                     ))}
                   </div>
                 </div>
@@ -334,7 +318,7 @@ const App = () => {
           <div className="flex items-center justify-between mb-6">
             <div className="flex flex-col">
               <h2 className="font-black text-amber-900 uppercase text-xs flex items-center gap-3"><Bug size={18} className="text-amber-500" /> Calendar ID Discovery</h2>
-              <p className="text-[9px] font-bold text-amber-600/70 uppercase tracking-widest mt-1 italic">Copy these IDs to INITIAL_ROOMS array</p>
+              <p className="text-[9px] font-bold text-amber-600/70 uppercase tracking-widest mt-1 italic">Room names from PCO API</p>
             </div>
             <button onClick={() => setShowDebug(false)} className="text-amber-500 font-black hover:text-amber-700 text-xs uppercase">Close</button>
           </div>
@@ -343,18 +327,15 @@ const App = () => {
               <div key={res.id} className="p-4 rounded-2xl border-2 border-slate-100 bg-white flex items-center justify-between hover:border-amber-100 transition-all shadow-sm">
                 <div className="overflow-hidden pr-4">
                   <p className="font-black text-[11px] text-slate-800 truncate uppercase tracking-tight leading-none">{res.name || res.attributes?.name || 'Unnamed'}</p>
-                  <code className="text-[10px] font-mono text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded mt-2 inline-block">ID: {res.id}</code>
+                  <code className="text-[10px] font-mono text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded mt-2 inline-block">{res.id}</code>
                 </div>
-                <button onClick={() => { navigator.clipboard.writeText(res.id); alert(`ID ${res.id} copied!`); }} className="p-2.5 bg-slate-50 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 text-slate-400 hover:text-indigo-600 transition-all shadow-sm"><CheckCircle2 size={18} /></button>
+                <button onClick={() => { navigator.clipboard.writeText(res.name || res.id); alert(`Copied: ${res.name || res.id}`); }} className="p-2.5 bg-slate-50 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 text-slate-400 hover:text-indigo-600 transition-all shadow-sm"><CheckCircle2 size={18} /></button>
               </div>
             )) : (
               <div className="col-span-full py-16 flex flex-col items-center justify-center gap-4">
                 <div className="bg-amber-50 p-6 rounded-3xl border-2 border-amber-100 max-w-md text-center">
                   <ShieldAlert className="mx-auto text-amber-500 mb-2" size={32} />
-                  <p className="text-[10px] font-black uppercase text-amber-900">API Connection Offline</p>
-                  <p className="text-[10px] text-amber-700/80 font-medium italic mt-2 leading-relaxed">
-                    The grid cannot fetch room definitions. Use the "Feed" view to check for incoming event data.
-                  </p>
+                  <p className="text-[10px] font-black uppercase text-amber-900">No room data available</p>
                 </div>
               </div>
             )}
