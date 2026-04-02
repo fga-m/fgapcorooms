@@ -63,4 +63,89 @@ export default async function handler(req, res) {
       }
     }
 
-    if (O
+    if (Object.keys(resourceMap).length === 0) {
+      try {
+        const resourcesRes = await fetch('https://api.planningcenteronline.com/calendar/v2/resources?per_page=100', { headers });
+        if (resourcesRes.ok) {
+          const resourcesData = await resourcesRes.json();
+          for (const resource of (resourcesData.data || [])) {
+            resourceMap[resource.id] = resource.attributes.name;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Build tag ID -> tag info lookup (name, color, group)
+    let tagMap = {};
+    let tagGroups = {};
+    if (tagsRes.ok) {
+      const tagsData = await tagsRes.json();
+      // Map tag groups
+      for (const group of (tagsData.included || [])) {
+        if (group.type === 'TagGroup') {
+          tagGroups[group.id] = group.attributes.name;
+        }
+      }
+      // Map tags
+      for (const tag of (tagsData.data || [])) {
+        tagMap[tag.id] = {
+          id: tag.id,
+          name: tag.attributes.name,
+          color: tag.attributes.color,
+          groupId: tag.relationships?.tag_group?.data?.id,
+          groupName: tagGroups[tag.relationships?.tag_group?.data?.id] || null
+        };
+      }
+    }
+
+    // Enrich each instance with resolved room names and tags
+    const instances = (data.data || []).map(instance => {
+      const bookingRefs = instance.relationships?.resource_bookings?.data || [];
+      const roomNames = bookingRefs
+        .map(ref => {
+          const booking = (data.included || []).find(
+            inc => inc.type === 'ResourceBooking' && inc.id === ref.id
+          );
+          if (!booking) return null;
+          const resourceId = booking.relationships?.resource?.data?.id;
+          return resourceId ? (resourceMap[resourceId] || null) : null;
+        })
+        .filter(Boolean);
+
+      // Resolve tags from included
+      const tagRefs = instance.relationships?.tags?.data || [];
+      const resolvedTags = tagRefs
+        .map(ref => tagMap[ref.id])
+        .filter(Boolean);
+
+      const departmentTags = resolvedTags.filter(t => t.groupName === 'Department/Ministries');
+      const eventTypeTags = resolvedTags.filter(t => t.groupName === 'Event Type');
+
+      // Use the first department tag's color for the event, fallback to grey
+      const eventColor = departmentTags[0]?.color || eventTypeTags[0]?.color || '#94a3b8';
+
+      return {
+        ...instance,
+        resolvedRooms: [...new Set(roomNames)],
+        resolvedTags,
+        departmentTags,
+        eventTypeTags,
+        eventColor
+      };
+    });
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
+    return res.status(200).json({
+      rooms: Object.entries(resourceMap).map(([id, name]) => ({ id, name })),
+      tags: Object.values(tagMap),
+      tagGroups: Object.entries(tagGroups).map(([id, name]) => ({ id, name })),
+      instances,
+      included: data.included || [],
+      range: { start: startStrWide, end: endStr }
+    });
+
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
