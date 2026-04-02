@@ -152,12 +152,33 @@ const App = () => {
   const rowHeight = 64;
   const groupHeaderHeight = 36;
 
-  // Calculate total height accounting for collapsed groups
   const totalHeight = ROOM_GROUPS.reduce((acc, group) => {
     acc += groupHeaderHeight;
     if (!collapsedGroups[group.id]) acc += group.rooms.length * rowHeight;
     return acc;
   }, 0);
+
+  const handleTimeHeaderDrag = (e) => {
+    const startX = e.clientX;
+    const startHour = viewStartHour;
+    const headerWidth = e.currentTarget.getBoundingClientRect().width;
+    const hoursPerPixel = visibleHoursCount / headerWidth;
+
+    const onMove = (moveEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const hourDelta = -(dx * hoursPerPixel);
+      const newHour = Math.round(startHour + hourDelta);
+      setViewStartHour(Math.max(0, Math.min(24 - visibleHoursCount, newHour)));
+    };
+
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -176,20 +197,18 @@ const App = () => {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
             <button onClick={() => {
-  const d = new Date(currentDate);
-  d.setUTCDate(d.getUTCDate() - 1);
-  setCurrentDate(d);
-}}
-              className="p-2 hover:bg-white rounded-xl transition-all"><ChevronLeft size={18} /></button>
+              const d = new Date(currentDate);
+              d.setUTCDate(d.getUTCDate() - 1);
+              setCurrentDate(d);
+            }} className="p-2 hover:bg-white rounded-xl transition-all"><ChevronLeft size={18} /></button>
             <span className="px-4 font-black text-slate-700 min-w-[160px] text-center text-xs uppercase tracking-tight">
               {currentDate.toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short', day: 'numeric', month: 'short' })}
             </span>
             <button onClick={() => {
-  const d = new Date(currentDate);
-  d.setUTCDate(d.getUTCDate() + 1);
-  setCurrentDate(d);
-}}
-              className="p-2 hover:bg-white rounded-xl transition-all"><ChevronRight size={18} /></button>
+              const d = new Date(currentDate);
+              d.setUTCDate(d.getUTCDate() + 1);
+              setCurrentDate(d);
+            }} className="p-2 hover:bg-white rounded-xl transition-all"><ChevronRight size={18} /></button>
           </div>
           <button onClick={resetToToday} className="px-4 py-2 bg-white hover:bg-slate-50 text-indigo-600 rounded-2xl text-xs font-black uppercase border border-indigo-100 shadow-sm transition-all flex items-center gap-2">
             <RotateCcw size={14} /> Today
@@ -237,35 +256,16 @@ const App = () => {
                   </div>
                 </div>
                 <div
-  className="flex flex-1 bg-white cursor-grab active:cursor-grabbing select-none"
-  onMouseDown={(e) => {
-    const startX = e.clientX;
-    const startHour = viewStartHour;
-    const headerWidth = e.currentTarget.getBoundingClientRect().width;
-    const hoursPerPixel = visibleHoursCount / headerWidth;
-
-    const onMove = (moveEvent) => {
-      const dx = moveEvent.clientX - startX;
-      const hourDelta = -(dx * hoursPerPixel);
-      const newHour = Math.round(startHour + hourDelta);
-      setViewStartHour(Math.max(0, Math.min(24 - visibleHoursCount, newHour)));
-    };
-
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }}
->
-  {Array.from({ length: visibleHoursCount }, (_, i) => viewStartHour + i).map(hour => (
-    <div key={hour} className="flex-1 border-r border-slate-100 h-12 flex items-center justify-center text-[10px] font-black text-slate-400 uppercase italic pointer-events-none">
-      {hour % 12 || 12}{hour >= 12 ? 'PM' : 'AM'}
-    </div>
-  ))}
-</div>
+                  className="flex flex-1 bg-white cursor-grab active:cursor-grabbing select-none"
+                  onMouseDown={handleTimeHeaderDrag}
+                >
+                  {Array.from({ length: visibleHoursCount }, (_, i) => viewStartHour + i).map(hour => (
+                    <div key={hour} className="flex-1 border-r border-slate-100 h-12 flex items-center justify-center text-[10px] font-black text-slate-400 uppercase italic pointer-events-none">
+                      {hour % 12 || 12}{hour >= 12 ? 'PM' : 'AM'}
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               {/* Scrollable body */}
               <div className="flex overflow-y-auto scrollbar-hide" style={{ height: 'calc(100% - 3rem)' }}>
@@ -274,7 +274,6 @@ const App = () => {
                 <div className="w-48 shrink-0 border-r border-slate-200 bg-slate-50/50" style={{ minHeight: `${totalHeight}px` }}>
                   {ROOM_GROUPS.map(group => (
                     <div key={group.id}>
-                      {/* Group header */}
                       <button
                         onClick={() => toggleGroup(group.id)}
                         className={`w-full flex items-center justify-between px-4 text-white text-[9px] font-black uppercase tracking-widest ${GROUP_COLORS[group.id]}`}
@@ -283,7 +282,6 @@ const App = () => {
                         <span>{group.label}</span>
                         {collapsedGroups[group.id] ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
                       </button>
-                      {/* Room rows */}
                       {!collapsedGroups[group.id] && group.rooms.map(room => (
                         <div
                           key={room.id}
@@ -301,22 +299,20 @@ const App = () => {
                 <div className="flex-1 relative bg-white" style={{ minHeight: `${totalHeight}px` }}>
                   {nowPos !== null && (
                     <div
-  className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 shadow-[0_0_15px_rgba(239,68,68,0.4)] pointer-events-none"
-  style={{ left: `${nowPos}%` }}
->
-  <div className="w-2.5 h-2.5 bg-red-500 rounded-full transform -translate-x-[4px] mt-1 shadow-sm" />
-</div>
+                      className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 shadow-[0_0_15px_rgba(239,68,68,0.4)] pointer-events-none"
+                      style={{ left: `${nowPos}%` }}
+                    >
+                      <div className="w-2.5 h-2.5 bg-red-500 rounded-full transform -translate-x-[4px] mt-1 shadow-sm" />
+                    </div>
                   )}
 
-                  {/* Render group headers + room rows on the right side too */}
                   {ROOM_GROUPS.map(group => (
                     <div key={group.id}>
-                      {/* Group header spacer */}
+                      {/* Group header stripe */}
                       <div
                         className={`w-full ${GROUP_COLORS[group.id]} opacity-20`}
                         style={{ height: `${groupHeaderHeight}px` }}
                       />
-                      {/* Room event rows */}
                       {!collapsedGroups[group.id] && group.rooms.map(room => (
                         <div
                           key={room.id}
