@@ -20,12 +20,13 @@ export default async function handler(req, res) {
   if (!appId || !secret) {
     return res.status(401).json({ error: "API Credentials missing in Vercel settings." });
   }
+
   try {
     const auth = Buffer.from(`${appId}:${secret}`).toString('base64');
     const headers = { 
       'Authorization': `Basic ${auth}`,
       'Accept': 'application/json',
-      'User-Agent': 'FGAM-Resource-Planner-v2'
+      'User-Agent': 'FGAM-Resource-Planner-v1'
     };
 
     // 1. Setup Time Window
@@ -35,50 +36,26 @@ export default async function handler(req, res) {
     const startStr = startDate.toISOString().split('T')[0] + 'T00:00:00Z';
     const endStr = endDate.toISOString().split('T')[0] + 'T23:59:59Z';
     
-    // 2. Build URL manually to ensure PCO compatibility
-    const pcoUrl = `https://api.planningcenteronline.com/calendar/v2/event_instances?include=event&where[starts_at][gte]=${startStr}&where[starts_at][lte]=${endStr}&per_page=100`;
+    // 2. Build URL with v2 and resource_bookings include for room data
+    const pcoUrl = `https://api.planningcenteronline.com/calendar/v2/event_instances?include=event,resource_bookings&where[starts_at][gte]=${startStr}&where[starts_at][lte]=${endStr}&per_page=100`;
     
     let response = await fetch(pcoUrl, { headers });
     let data = null;
     let contentType = response.headers.get("content-type");
 
-    // 3. Robust Response Handling
+    // 3. Response Handling with debug info on failure
     if (response.ok && contentType && contentType.includes("application/json")) {
       data = await response.json();
     } else {
-      // Fallback to simple Events endpoint
-      const fallbackUrl = `https://api.planningcenteronline.com/calendar/v2/events?per_page=50`;
-      const fallbackRes = await fetch(fallbackUrl, { headers });
-      
-      if (fallbackRes.ok) {
-        const fbData = await fallbackRes.json();
-        const simulatedInstances = (fbData.data || []).map(evt => ({
-          id: `sim-${evt.id}`,
-          type: "EventInstance",
-          attributes: {
-            event_name: evt.attributes.name,
-            starts_at: new Date().toISOString(),
-            ends_at: new Date().toISOString()
-          },
-          relationships: { event: { data: { id: evt.id, type: "Event" } } }
-        }));
-        return res.status(200).json({
-          instances: simulatedInstances,
-          included: fbData.data.map(d => ({ ...d, type: "Event" })),
-          note: "Primary query failed. Showing raw Event list as fallback."
-        });
-      }
-
-      // Both requests failed
-      const errorText = await fallbackRes.text();
+      const errorText = await response.text();
       return res.status(response.status).json({ 
-        error: `PCO Server Error (${response.status})`, 
-        details: "Check your App ID/Secret and ensure 'Calendar' scope is enabled.",
-        fallbackError: errorText.slice(0, 200)
+        error: `PCO Server Error (${response.status})`,
+        url: pcoUrl,
+        details: errorText.slice(0, 500)
       });
     }
 
-    // 4. Fetch rooms separately (non-blocking)
+    // 4. Fetch rooms separately so we have a full room list
     let rooms = [];
     try {
       const roomsRes = await fetch('https://api.planningcenteronline.com/calendar/v2/rooms', { headers });
