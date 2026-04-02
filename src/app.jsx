@@ -19,13 +19,15 @@ import {
   ArrowRight,
   ShieldAlert,
   ListFilter,
-  LayoutGrid
+  LayoutGrid,
+  FileCode
 } from 'lucide-react';
 
 /**
- * PCO CALENDAR DASHBOARD - DIAGNOSTIC FEED VERSION
- * 1. Switch to 'Feed' view to see raw event data from PCO.
- * 2. If events show in the Feed but not the Grid, copy the IDs to the 'pcoRoomId' below.
+ * PCO CALENDAR DASHBOARD - STABLE VERSION
+ * 1. Automatically handles URL encoding for PCO API.
+ * 2. Improved error handling for HTML error pages.
+ * 3. Use 'Feed' view to find your IDs if the grid is empty.
  */
 
 const INITIAL_ROOMS = [
@@ -51,7 +53,7 @@ const CATEGORY_COLORS = {
 const App = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewStartHour, setViewStartHour] = useState(8); 
-  const [activeView, setActiveView] = useState('grid'); // 'grid' or 'feed'
+  const [activeView, setActiveView] = useState('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedRoomIds, setSelectedRoomIds] = useState(INITIAL_ROOMS.map(r => r.id));
@@ -75,7 +77,7 @@ const App = () => {
       const result = await response.json();
       
       if (!response.ok) {
-          throw new Error(result.error || `Connection Failed (${response.status})`);
+          throw new Error(result.error || `Server Error ${response.status}`);
       }
       
       setApiRooms(result.rooms || []);
@@ -83,11 +85,7 @@ const App = () => {
       const mappedBookings = (result.instances || []).map(instance => {
         const eventId = instance.relationships?.event?.data?.id;
         const eventData = (result.included || []).find(inc => inc.type === 'Event' && inc.id === eventId);
-        
-        // PCO Calendar instances can have multiple rooms
         const roomIds = (instance.relationships?.rooms?.data || []).map(r => r.id);
-        
-        // Find names of those rooms for the feed view
         const roomNames = roomIds.map(rid => {
             const rObj = (result.included || []).find(inc => inc.type === 'Room' && inc.id === rid);
             return rObj?.attributes?.name || `ID: ${rid}`;
@@ -106,7 +104,6 @@ const App = () => {
       setBookings(mappedBookings);
       setLastUpdated(new Date());
     } catch (err) {
-      console.error("Dashboard Error:", err);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -207,9 +204,14 @@ const App = () => {
 
       <main className="flex-1 overflow-hidden flex flex-col relative">
         {error && (
-          <div className="bg-rose-50 border-b border-rose-100 p-4 flex flex-col items-center justify-center gap-1 text-rose-800 shrink-0">
-            <div className="flex items-center gap-2 text-[10px] font-black uppercase"><AlertCircle size={14} /> System Error</div>
-            <p className="text-[10px] font-bold text-center max-w-lg leading-relaxed italic opacity-80">{error}</p>
+          <div className="bg-rose-50 border-b border-rose-100 p-4 flex flex-col items-center justify-center gap-2 text-rose-800 shrink-0">
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase"><AlertCircle size={14} /> Connection Error</div>
+            <div className="max-w-2xl bg-white/50 rounded-xl p-3 border border-rose-100 flex items-start gap-3">
+                <FileCode className="shrink-0 mt-1" size={16} />
+                <p className="text-[10px] font-bold leading-relaxed italic opacity-80">
+                    {error.length > 200 ? `${error.substring(0, 200)}...` : error}
+                </p>
+            </div>
           </div>
         )}
 
@@ -271,7 +273,6 @@ const App = () => {
             </div>
           </div>
         ) : (
-          /* Live Feed View */
           <div className="flex-1 overflow-auto p-6 bg-slate-100/50">
             <div className="max-w-4xl mx-auto space-y-4 pb-20">
               <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-3xl mb-8 flex items-center gap-6">
@@ -319,32 +320,6 @@ const App = () => {
         )}
       </main>
 
-      {/* Room Visibility Modal */}
-      {isRoomSelectorOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
-            <div className="p-8 border-b flex items-center justify-between bg-slate-50">
-              <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Visibility Settings</h3>
-              <button onClick={() => setIsRoomSelectorOpen(false)} className="p-2 hover:bg-white rounded-full text-slate-400 hover:text-slate-600 transition-colors"><X size={20}/></button>
-            </div>
-            <div className="flex-1 overflow-auto p-6 space-y-2 bg-white">
-              {INITIAL_ROOMS.map(room => (
-                <button key={room.id} onClick={() => {
-                  const newIds = selectedRoomIds.includes(room.id) 
-                    ? selectedRoomIds.filter(id => id !== room.id)
-                    : [...selectedRoomIds, room.id];
-                  setSelectedRoomIds(newIds);
-                }} className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${selectedRoomIds.includes(room.id) ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}>
-                  <div className="text-left font-black text-xs uppercase tracking-tight">{room.displayName}</div>
-                  {selectedRoomIds.includes(room.id) && <div className="bg-indigo-600 p-1 rounded-full text-white"><Check size={12} strokeWidth={4} /></div>}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Discovery Menu */}
       {showDebug && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-amber-400 z-[100] h-96 overflow-hidden shadow-2xl flex flex-col p-8 animate-in slide-in-from-bottom-full duration-500">
           <div className="flex items-center justify-between mb-6">
