@@ -69,7 +69,7 @@ const App = () => {
   const [error, setError] = useState(null);
   const [showDebug, setShowDebug] = useState(false);
 
-  const visibleHoursCount = 8;
+  const visibleHoursCount = 12;
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
