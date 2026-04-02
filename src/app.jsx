@@ -265,7 +265,12 @@ const App = () => {
                     <div key={room.id} className="flex h-28 border-b border-slate-100 relative group overflow-hidden">
                       {Array.from({ length: visibleHoursCount }).map((_, i) => <div key={i} className="flex-1 border-r border-slate-50/50 group-hover:bg-slate-50/10 transition-colors"></div>)}
                       {bookings
-                        .filter(b => b.roomNames.includes(room.pcoRoomId) && room.pcoRoomId !== "" && b.start.startsWith(currentDate.toISOString().split('T')[0]))
+                        .filter(b => {
+  if (!b.roomNames.includes(room.pcoRoomId) || room.pcoRoomId === "") return false;
+  const eventDate = new Date(b.start).toLocaleDateString('en-AU', { timeZone: 'Australia/Melbourne' });
+  const viewDate = currentDate.toLocaleDateString('en-AU', { timeZone: 'Australia/Melbourne' });
+  return eventDate === viewDate;
+})
                         .map(b => (
                           <div key={b.id} style={getEventStyle(b)} className={`absolute top-4 h-20 rounded-2xl p-4 shadow-lg border-l-4 border-white/30 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center ${CATEGORY_COLORS[room.category] || 'bg-indigo-600'}`}>
                             <p className="text-[10px] font-black truncate uppercase leading-tight drop-shadow-sm">{b.title}</p>
