@@ -368,7 +368,7 @@ const App = () => {
                 </div>
               </div>
 
-              {bookings.length > 0 ? bookings.sort((a, b) => new Date(a.start) - new Date(b.start)).map(b => (
+              {bookings.length > 0 ? bookings.filter(b => getMelbDate(b.start) === currentDate).sort((a, b) => new Date(a.start) - new Date(b.start)).map(b => (
                 <div key={b.id} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between gap-4 transition-all hover:shadow-md">
                   <div className="flex items-center gap-4 min-w-0">
                     <div className="w-16 h-16 bg-slate-50 rounded-2xl flex flex-col items-center justify-center border border-slate-100 shrink-0">
