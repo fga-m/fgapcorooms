@@ -48,7 +48,7 @@ const ROOM_GROUPS = [
 ];
 
 const GROUP_COLORS = {
-  level2: '#2563eb',
+  level2: '#FFAB57',
   level1: '#059669',
   online: '#4f46e5',
 };
