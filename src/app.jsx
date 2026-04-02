@@ -238,7 +238,7 @@ const App = () => {
                 <div className="flex-1 relative bg-white self-stretch">
                   {nowPos !== null && (
                     <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 shadow-[0_0_15px_rgba(239,68,68,0.4)] pointer-events-none" style={{ left: `${nowPos}%` }}>
-                      <div className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm mt-2 transform -translate-x-1/2 uppercase tracking-tighter shadow-sm">NOW</div>
+                      <div className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm mt-1 transform -translate-x-1/2 uppercase tracking-tighter shadow-sm whitespace-nowrap">NOW</div>
                     </div>
                   )}
                   {filteredRooms.map(room => (
