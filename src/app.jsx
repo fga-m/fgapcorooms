@@ -41,20 +41,19 @@ const CATEGORY_COLORS = {
 
 const TZ = 'Australia/Melbourne';
 
-// Get decimal hour (e.g. 14.5 = 2:30pm) in Melbourne time from a date
 const getMelbHour = (date) => {
-  const d = new Date(date);
   const parts = new Intl.DateTimeFormat('en-AU', {
     timeZone: TZ, hour: 'numeric', minute: 'numeric', hour12: false
-  }).formatToParts(d);
+  }).formatToParts(new Date(date));
   const h = parseInt(parts.find(p => p.type === 'hour').value);
   const m = parseInt(parts.find(p => p.type === 'minute').value);
   return h + m / 60;
 };
 
-// Get YYYY-MM-DD in Melbourne time
 const getMelbDate = (date) => {
-  return new Date(date).toLocaleDateString('en-AU', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+  return new Date(date).toLocaleDateString('en-AU', {
+    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit'
+  });
 };
 
 const App = () => {
@@ -75,15 +74,11 @@ const App = () => {
     setIsLoading(true);
     setError(null);
     try {
-      // Use Melbourne date for the API call
       const dateString = new Date(currentDate).toLocaleDateString('en-CA', { timeZone: TZ });
       const response = await fetch(`/api/calendar?date=${dateString}`);
       const result = await response.json();
-
       if (!response.ok) throw new Error(result.error || `Server Error ${response.status}`);
-
       setApiRooms(result.rooms || []);
-
       const mappedBookings = (result.instances || []).map(instance => {
         const eventId = instance.relationships?.event?.data?.id;
         const eventData = (result.included || []).find(inc => inc.type === 'Event' && inc.id === eventId);
@@ -95,7 +90,6 @@ const App = () => {
           roomNames: instance.resolvedRooms || []
         };
       });
-
       setBookings(mappedBookings);
       setLastUpdated(new Date());
     } catch (err) {
@@ -114,10 +108,9 @@ const App = () => {
   const resetToToday = () => {
     const now = new Date();
     setCurrentDate(now);
-    setViewStartHour(Math.max(0, Math.min(16, Math.floor(getMelbHour(now)) - 1)));
+    setViewStartHour(Math.max(0, Math.min(24 - visibleHoursCount, Math.floor(getMelbHour(now)) - 1)));
   };
 
-  // Get event position/width as % within the visible time window, all in Melbourne time
   const getEventStyle = (event) => {
     const startHour = getMelbHour(event.start);
     const endHour = getMelbHour(event.end);
@@ -129,20 +122,18 @@ const App = () => {
     return { left: `${left}%`, width: `${width}%` };
   };
 
-  // NOW line as % within the visible time window
   const nowPos = useMemo(() => {
     const now = new Date();
-    const todayMelb = getMelbDate(now);
-    const currentMelb = getMelbDate(currentDate);
-    if (todayMelb !== currentMelb) return null;
+    if (getMelbDate(now) !== getMelbDate(currentDate)) return null;
     const hour = getMelbHour(now);
     if (hour < viewStartHour || hour > viewStartHour + visibleHoursCount) return null;
     return ((hour - viewStartHour) / visibleHoursCount) * 100;
   }, [currentDate, viewStartHour]);
 
   const filteredRooms = INITIAL_ROOMS.filter(room => selectedRoomIds.includes(room.id));
-
   const currentDateMelb = getMelbDate(currentDate);
+  const rowHeight = 64;
+  const totalHeight = filteredRooms.length * rowHeight;
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -210,7 +201,7 @@ const App = () => {
                   <span className="uppercase tracking-widest text-[9px] font-black text-slate-400">Rooms</span>
                   <div className="flex items-center gap-1">
                     <button onClick={() => shiftTime(-1)} disabled={viewStartHour === 0} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowLeft size={12} /></button>
-                    <button onClick={() => shiftTime(1)} disabled={viewStartHour >= 16} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowRight size={12} /></button>
+                    <button onClick={() => shiftTime(1)} disabled={viewStartHour >= 24 - visibleHoursCount} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowRight size={12} /></button>
                   </div>
                 </div>
                 <div className="flex flex-1 bg-white">
@@ -223,26 +214,33 @@ const App = () => {
               </div>
 
               {/* Scrollable body */}
-              <div className="flex overflow-y-auto scrollbar-hide" style={{height: 'calc(100% - 3rem)'}}>
+              <div className="flex overflow-y-auto scrollbar-hide" style={{ height: 'calc(100% - 3rem)' }}>
 
                 {/* Left: room labels */}
-                <div className="w-48 shrink-0 border-r border-slate-200 bg-slate-50/50 self-stretch">
+                <div className="w-48 shrink-0 border-r border-slate-200 bg-slate-50/50" style={{ minHeight: `${totalHeight}px` }}>
                   {filteredRooms.map(room => (
-                    <div key={room.id} className="h-16 border-b border-slate-100 px-4 flex items-center hover:bg-slate-50/50 transition-colors">
-  <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate leading-tight">{room.displayName}</span>
-</div>
+                    <div key={room.id} className="border-b border-slate-100 px-4 flex items-center hover:bg-slate-50/50 transition-colors" style={{ height: `${rowHeight}px` }}>
+                      <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate leading-tight">{room.displayName}</span>
+                    </div>
                   ))}
                 </div>
 
-                {/* Right: event grid with NOW line inside */}
-                <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 shadow-[0_0_15px_rgba(239,68,68,0.4)] pointer-events-none">
+                {/* Right: event grid */}
+                <div className="flex-1 relative bg-white" style={{ minHeight: `${totalHeight}px` }}>
                   {nowPos !== null && (
-                    <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 shadow-[0_0_15px_rgba(239,68,68,0.4)] pointer-events-none" style={{ left: `${nowPos}%` }}>
+                    <div
+                      className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 shadow-[0_0_15px_rgba(239,68,68,0.4)] pointer-events-none"
+                      style={{ left: `${nowPos}%` }}
+                    >
                       <div className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm mt-1 transform -translate-x-1/2 uppercase tracking-tighter shadow-sm whitespace-nowrap">NOW</div>
                     </div>
                   )}
-                  {filteredRooms.map(room => (
-                    <div key={room.id} className="flex h-16 border-b border-slate-100 relative group overflow-hidden">
+                  {filteredRooms.map((room, idx) => (
+                    <div
+                      key={room.id}
+                      className="flex border-b border-slate-100 relative group overflow-hidden"
+                      style={{ height: `${rowHeight}px`, top: 0 }}
+                    >
                       {Array.from({ length: visibleHoursCount }).map((_, i) => (
                         <div key={i} className="flex-1 border-r border-slate-50/50 group-hover:bg-slate-50/10 transition-colors"></div>
                       ))}
@@ -252,7 +250,11 @@ const App = () => {
                           return getMelbDate(b.start) === currentDateMelb;
                         })
                         .map(b => (
-                          <div key={b.id} style={getEventStyle(b)} className={`absolute top-1 h-14 rounded-xl p-2 shadow-lg border-l-4 border-white/30 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center ${CATEGORY_COLORS[room.category] || 'bg-indigo-600'}`}>
+                          <div
+                            key={b.id}
+                            style={getEventStyle(b)}
+                            className={`absolute top-1 h-14 rounded-xl p-2 shadow-lg border-l-4 border-white/30 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center ${CATEGORY_COLORS[room.category] || 'bg-indigo-600'}`}
+                          >
                             <p className="text-[9px] font-black truncate uppercase leading-tight drop-shadow-sm">{b.title}</p>
                             <p className="text-[7px] font-bold opacity-80 uppercase mt-1 flex items-center gap-1">
                               <Clock size={8} className="shrink-0" />
