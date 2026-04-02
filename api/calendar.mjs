@@ -1,11 +1,9 @@
 /**
  * api/calendar.mjs
- * ULTRA-STABLE CALENDAR PROXY
  */
 export default async function handler(req, res) {
   const { date } = req.query;
 
-  // Validate date parameter
   if (!date) {
     return res.status(400).json({ error: "Missing required 'date' query parameter (e.g. ?date=2026-04-02)" });
   }
@@ -23,7 +21,7 @@ export default async function handler(req, res) {
 
   try {
     const auth = Buffer.from(`${appId}:${secret}`).toString('base64');
-    const headers = { 
+    const headers = {
       'Authorization': `Basic ${auth}`,
       'Accept': 'application/json',
       'User-Agent': 'FGAM-Resource-Planner-v1'
@@ -35,41 +33,73 @@ export default async function handler(req, res) {
     endDate.setDate(startDate.getDate() + 7);
     const startStr = startDate.toISOString().split('T')[0] + 'T00:00:00Z';
     const endStr = endDate.toISOString().split('T')[0] + 'T23:59:59Z';
-    
-    // 2. Build URL with v2 and resource_bookings include for room data
+
+    // 2. Fetch event instances and rooms in parallel
     const pcoUrl = `https://api.planningcenteronline.com/calendar/v2/event_instances?include=event,resource_bookings&where[starts_at][gte]=${startStr}&where[starts_at][lte]=${endStr}&per_page=100`;
-    
-    let response = await fetch(pcoUrl, { headers });
-    let data = null;
-    let contentType = response.headers.get("content-type");
 
-    // 3. Response Handling with debug info on failure
-    if (response.ok) {
-  data = await response.json();
-} else {
-  const errorText = await response.text();
-  return res.status(response.status).json({ 
-    error: `PCO Server Error (${response.status})`,
-    url: pcoUrl,
-    details: errorText.slice(0, 500)
-  });
-}
+    const [eventRes, roomsRes] = await Promise.all([
+      fetch(pcoUrl, { headers }),
+      fetch('https://api.planningcenteronline.com/calendar/v2/rooms?per_page=100', { headers })
+    ]);
 
-    // 4. Fetch rooms separately so we have a full room list
-    let rooms = [];
-    try {
-      const roomsRes = await fetch('https://api.planningcenteronline.com/calendar/v2/rooms', { headers });
-      if (roomsRes.ok) {
-        const rData = await roomsRes.json();
-        rooms = rData.data || [];
+    if (!eventRes.ok) {
+      const errorText = await eventRes.text();
+      return res.status(eventRes.status).json({
+        error: `PCO Event Error (${eventRes.status})`,
+        details: errorText.slice(0, 500)
+      });
+    }
+
+    const data = await eventRes.json();
+
+    // 3. Build a resource ID -> room name lookup map
+    let resourceMap = {};
+    if (roomsRes.ok) {
+      const roomsData = await roomsRes.json();
+      for (const room of (roomsData.data || [])) {
+        resourceMap[room.id] = room.attributes.name;
       }
-    } catch (e) {}
+    }
+
+    // 4. Also check resources endpoint in case rooms are stored there
+    if (Object.keys(resourceMap).length === 0) {
+      try {
+        const resourcesRes = await fetch('https://api.planningcenteronline.com/calendar/v2/resources?per_page=100', { headers });
+        if (resourcesRes.ok) {
+          const resourcesData = await resourcesRes.json();
+          for (const resource of (resourcesData.data || [])) {
+            resourceMap[resource.id] = resource.attributes.name;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 5. Enrich each instance with resolved room names
+    const instances = (data.data || []).map(instance => {
+      const bookingRefs = instance.relationships?.resource_bookings?.data || [];
+      const roomNames = bookingRefs
+        .map(ref => {
+          // Find the matching ResourceBooking in included
+          const booking = (data.included || []).find(
+            inc => inc.type === 'ResourceBooking' && inc.id === ref.id
+          );
+          if (!booking) return null;
+          const resourceId = booking.relationships?.resource?.data?.id;
+          return resourceId ? (resourceMap[resourceId] || null) : null;
+        })
+        .filter(Boolean);
+
+      return {
+        ...instance,
+        resolvedRooms: [...new Set(roomNames)] // deduplicate
+      };
+    });
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
     return res.status(200).json({
-      rooms: rooms,
-      instances: data.data || [],
+      rooms: Object.entries(resourceMap).map(([id, name]) => ({ id, name })),
+      instances,
       included: data.included || [],
       range: { start: startStr, end: endStr }
     });
