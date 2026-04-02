@@ -206,18 +206,42 @@ const App = () => {
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
-            <button
-              onClick={() => setCurrentDate(shiftDateString(currentDate, -1))}
-              className="p-2 hover:bg-white rounded-xl transition-all"
-            ><ChevronLeft size={18} /></button>
-            <span className="px-4 font-black text-slate-700 min-w-[160px] text-center text-xs uppercase tracking-tight">
-              {displayDate}
-            </span>
-            <button
-              onClick={() => setCurrentDate(shiftDateString(currentDate, 1))}
-              className="p-2 hover:bg-white rounded-xl transition-all"
-            ><ChevronRight size={18} /></button>
-          </div>
+  <button
+    onClick={() => setCurrentDate(shiftDateString(currentDate, -1))}
+    className="p-2 hover:bg-white rounded-xl transition-all"
+  ><ChevronLeft size={18} /></button>
+  <div className="relative">
+    <button
+      onClick={() => setShowDatePicker(prev => !prev)}
+      className="px-4 font-black text-slate-700 min-w-[160px] text-center text-xs uppercase tracking-tight hover:text-indigo-600 transition-colors"
+    >
+      {displayDate}
+    </button>
+    {showDatePicker && (
+      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4">
+        <input
+          type="date"
+          value={currentDate}
+          onChange={(e) => {
+            if (e.target.value) {
+              setCurrentDate(e.target.value);
+              setShowDatePicker(false);
+            }
+          }}
+          className="block w-full text-sm text-slate-700 font-bold border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+        />
+        <button
+          onClick={() => setShowDatePicker(false)}
+          className="mt-2 w-full text-[10px] font-black uppercase text-slate-400 hover:text-slate-600"
+        >Close</button>
+      </div>
+    )}
+  </div>
+  <button
+    onClick={() => setCurrentDate(shiftDateString(currentDate, 1))}
+    className="p-2 hover:bg-white rounded-xl transition-all"
+  ><ChevronRight size={18} /></button>
+</div>
           <button onClick={resetToToday} className="px-4 py-2 bg-white hover:bg-slate-50 text-indigo-600 rounded-2xl text-xs font-black uppercase border border-indigo-100 shadow-sm transition-all flex items-center gap-2">
             <RotateCcw size={14} /> Today
           </button>
