@@ -92,7 +92,7 @@ const App = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const dateString = new Date(currentDate).toLocaleDateString('en-CA', { timeZone: TZ });
+      const dateString = currentDate.toISOString().split('T')[0];
       const response = await fetch(`/api/calendar?date=${dateString}`);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `Server Error ${response.status}`);
