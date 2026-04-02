@@ -92,13 +92,13 @@ const App = () => {
         });
 
         return {
-          id: instance.id,
-          title: eventData?.attributes?.name || "Untitled Event",
-          start: instance.attributes?.starts_at,
-          end: instance.attributes?.ends_at,
-          pcoRoomIds: roomIds,
-          roomNames: roomNames
-        };
+  id: instance.id,
+  title: eventData?.attributes?.name || instance.attributes?.name || "Untitled Event",
+  start: instance.attributes?.starts_at,
+  end: instance.attributes?.ends_at,
+  pcoRoomIds: instance.resolvedRooms || [],
+  roomNames: instance.resolvedRooms || []
+};
       });
 
       setBookings(mappedBookings);
