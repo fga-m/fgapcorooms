@@ -31,13 +31,19 @@ import {
  */
 
 const INITIAL_ROOMS = [
-  { id: 'r1', pcoRoomId: '', displayName: 'Sanctuary', category: 'Worship', capacity: 450 },
-  { id: 'r2', pcoRoomId: '', displayName: 'Lobby', category: 'General', capacity: 120 },
-  { id: 'r3', pcoRoomId: '', displayName: 'Zoom 1', category: 'Digital', capacity: 100 },
-  { id: 'r4', pcoRoomId: '', displayName: 'Zoom 2', category: 'Digital', capacity: 100 },
-  { id: 'r5', pcoRoomId: '', displayName: 'Zoom 3', category: 'Digital', capacity: 100 },
-  { id: 'r6', pcoRoomId: '', displayName: 'Zoom 4', category: 'Digital', capacity: 100 },
-  { id: 'r7', pcoRoomId: '', displayName: 'Multipurpose Room', category: 'General', capacity: 50 },
+  { id: 'r1', pcoRoomId: 'Level 2 – Sanctuary', displayName: 'Sanctuary', category: 'Worship', capacity: 450 },
+  { id: 'r2', pcoRoomId: 'Level 2 – Main Lobby', displayName: 'Main Lobby', category: 'General', capacity: 120 },
+  { id: 'r3', pcoRoomId: 'Level 2 – Multipurpose Room', displayName: 'Multipurpose Room', category: 'General', capacity: 50 },
+  { id: 'r4', pcoRoomId: 'Level 2 – Meeting Room 1', displayName: 'Meeting Room 1', category: 'General', capacity: 20 },
+  { id: 'r5', pcoRoomId: 'Level 2 – Meeting Room 2', displayName: 'Meeting Room 2', category: 'General', capacity: 20 },
+  { id: 'r6', pcoRoomId: 'Level 2 – Meeting Room 3', displayName: 'Meeting Room 3', category: 'General', capacity: 20 },
+  { id: 'r7', pcoRoomId: 'Level 2 – Meeting Room 5', displayName: 'Meeting Room 5', category: 'General', capacity: 20 },
+  { id: 'r8', pcoRoomId: 'Level 1 – Large Meeting Room', displayName: 'Large Meeting Room', category: 'General', capacity: 30 },
+  { id: 'r9', pcoRoomId: 'Level 1 – Open Office Area', displayName: 'Open Office Area', category: 'Admin', capacity: 15 },
+  { id: 'r10', pcoRoomId: 'Level 1 – Chris\' Office', displayName: 'Chris\' Office', category: 'Admin', capacity: 5 },
+  { id: 'r11', pcoRoomId: 'Level 1 – Staff Kitchen', displayName: 'Staff Kitchen', category: 'General', capacity: 10 },
+  { id: 'r12', pcoRoomId: '/zoom', displayName: 'Zoom 1', category: 'Digital', capacity: 100 },
+  { id: 'r13', pcoRoomId: '/zoom3', displayName: 'Zoom 3', category: 'Digital', capacity: 100 },
 ];
 
 const CATEGORY_COLORS = {
@@ -259,7 +265,7 @@ const App = () => {
                     <div key={room.id} className="flex h-28 border-b border-slate-100 relative group overflow-hidden">
                       {Array.from({ length: visibleHoursCount }).map((_, i) => <div key={i} className="flex-1 border-r border-slate-50/50 group-hover:bg-slate-50/10 transition-colors"></div>)}
                       {bookings
-                        .filter(b => b.pcoRoomIds.includes(room.pcoRoomId) && room.pcoRoomId !== "" && b.start.startsWith(currentDate.toISOString().split('T')[0]))
+                        .filter(b => b.roomNames.includes(room.pcoRoomId) && room.pcoRoomId !== "" && b.start.startsWith(currentDate.toISOString().split('T')[0]))
                         .map(b => (
                           <div key={b.id} style={getEventStyle(b)} className={`absolute top-4 h-20 rounded-2xl p-4 shadow-lg border-l-4 border-white/30 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center ${CATEGORY_COLORS[room.category] || 'bg-indigo-600'}`}>
                             <p className="text-[10px] font-black truncate uppercase leading-tight drop-shadow-sm">{b.title}</p>
