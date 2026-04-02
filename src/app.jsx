@@ -3,40 +3,54 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, Clock, Users, AlertCircle, Bug, RefreshCw,
   Zap, RotateCcw, CheckCircle2, ArrowLeft, ArrowRight, ShieldAlert,
-  ListFilter, LayoutGrid, FileCode
+  ListFilter, LayoutGrid, FileCode, ChevronDown, ChevronUp
 } from 'lucide-react';
 
-const INITIAL_ROOMS = [
-  { id: 'r1', pcoRoomId: 'Level 2 - Sanctuary', displayName: 'Sanctuary', category: 'Worship', capacity: 450 },
-  { id: 'r2', pcoRoomId: 'Level 2 - Main Lobby', displayName: 'Main Lobby', category: 'General', capacity: 120 },
-  { id: 'r3', pcoRoomId: 'Level 2 - Multipurpose Room', displayName: 'Multipurpose Room', category: 'General', capacity: 50 },
-  { id: 'r4', pcoRoomId: 'Level 2 - Meeting Room 1', displayName: 'Meeting Room 1', category: 'General', capacity: 20 },
-  { id: 'r5', pcoRoomId: 'Level 2 - Meeting Room 2', displayName: 'Meeting Room 2', category: 'General', capacity: 20 },
-  { id: 'r6', pcoRoomId: 'Level 2 - Meeting Room 3', displayName: 'Meeting Room 3', category: 'General', capacity: 20 },
-  { id: 'r7', pcoRoomId: 'Level 2 - Meeting Room 5', displayName: 'Meeting Room 5', category: 'General', capacity: 20 },
-  { id: 'r8', pcoRoomId: 'Level 2 - Commercial Kitchen', displayName: 'Commercial Kitchen', category: 'General', capacity: 15 },
-  { id: 'r9', pcoRoomId: 'Level 2 - Backstage Area', displayName: 'Backstage Area', category: 'General', capacity: 20 },
-  { id: 'r10', pcoRoomId: 'Level 2 - Guest Central', displayName: 'Guest Central', category: 'General', capacity: 20 },
-  { id: 'r11', pcoRoomId: 'Level 1 - Large Meeting Room ', displayName: 'Large Meeting Room', category: 'General', capacity: 30 },
-  { id: 'r12', pcoRoomId: 'Level 1 - Open Office Area', displayName: 'Open Office Area', category: 'Admin', capacity: 15 },
-  { id: 'r13', pcoRoomId: "Level 1 - Chris' Office", displayName: "Chris' Office", category: 'Admin', capacity: 5 },
-  { id: 'r14', pcoRoomId: 'Level 1 - Staff Kitchen', displayName: 'Staff Kitchen', category: 'General', capacity: 10 },
-  { id: 'r15', pcoRoomId: 'Level 1 - REACH Office', displayName: 'REACH Office', category: 'Admin', capacity: 10 },
-  { id: 'r16', pcoRoomId: 'Covered rooftop carpark', displayName: 'Rooftop Carpark', category: 'General', capacity: 50 },
-  { id: 'r17', pcoRoomId: '/zoom', displayName: 'Zoom 1', category: 'Digital', capacity: 100 },
-  { id: 'r18', pcoRoomId: '/zoom2', displayName: 'Zoom 2', category: 'Digital', capacity: 100 },
-  { id: 'r19', pcoRoomId: '/zoom3', displayName: 'Zoom 3', category: 'Digital', capacity: 100 },
-  { id: 'r20', pcoRoomId: '/zoom4', displayName: 'Zoom 4', category: 'Digital', capacity: 100 },
+const ROOM_GROUPS = [
+  {
+    id: 'level2',
+    label: 'Level 2',
+    rooms: [
+      { id: 'r1', pcoRoomId: 'Level 2 - Sanctuary', displayName: 'Sanctuary' },
+      { id: 'r2', pcoRoomId: 'Level 2 - Main Lobby', displayName: 'Main Lobby' },
+      { id: 'r3', pcoRoomId: 'Level 2 - Multipurpose Room', displayName: 'Multipurpose Room' },
+      { id: 'r4', pcoRoomId: 'Level 2 - Meeting Room 1', displayName: 'Meeting Room 1' },
+      { id: 'r5', pcoRoomId: 'Level 2 - Meeting Room 2', displayName: 'Meeting Room 2' },
+      { id: 'r6', pcoRoomId: 'Level 2 - Meeting Room 3', displayName: 'Meeting Room 3' },
+      { id: 'r7', pcoRoomId: 'Level 2 - Meeting Room 5', displayName: 'Meeting Room 5' },
+      { id: 'r8', pcoRoomId: 'Level 2 - Commercial Kitchen', displayName: 'Commercial Kitchen' },
+      { id: 'r9', pcoRoomId: 'Level 2 - Backstage Area', displayName: 'Backstage Area' },
+      { id: 'r10', pcoRoomId: 'Level 2 - Guest Central', displayName: 'Guest Central' },
+    ]
+  },
+  {
+    id: 'level1',
+    label: 'Level 1',
+    rooms: [
+      { id: 'r11', pcoRoomId: 'Level 1 - Large Meeting Room ', displayName: 'Large Meeting Room' },
+      { id: 'r12', pcoRoomId: 'Level 1 - Open Office Area', displayName: 'Open Office Area' },
+      { id: 'r13', pcoRoomId: "Level 1 - Chris' Office", displayName: "Chris' Office" },
+      { id: 'r14', pcoRoomId: 'Level 1 - Staff Kitchen', displayName: 'Staff Kitchen' },
+      { id: 'r15', pcoRoomId: 'Level 1 - REACH Office', displayName: 'REACH Office' },
+      { id: 'r16', pcoRoomId: 'Covered rooftop carpark', displayName: 'Rooftop Carpark' },
+    ]
+  },
+  {
+    id: 'online',
+    label: 'Online',
+    rooms: [
+      { id: 'r17', pcoRoomId: '/zoom', displayName: 'Zoom 1' },
+      { id: 'r18', pcoRoomId: '/zoom2', displayName: 'Zoom 2' },
+      { id: 'r19', pcoRoomId: '/zoom3', displayName: 'Zoom 3' },
+      { id: 'r20', pcoRoomId: '/zoom4', displayName: 'Zoom 4' },
+    ]
+  }
 ];
 
-const CATEGORY_COLORS = {
-  Worship: 'bg-blue-600',
-  Youth: 'bg-purple-600',
-  Admin: 'bg-slate-600',
-  Kids: 'bg-orange-600',
-  General: 'bg-emerald-600',
-  Tech: 'bg-rose-600',
-  Digital: 'bg-indigo-600'
+const GROUP_COLORS = {
+  level2: 'bg-blue-600',
+  level1: 'bg-emerald-600',
+  online: 'bg-indigo-600',
 };
 
 const TZ = 'Australia/Melbourne';
@@ -60,15 +74,19 @@ const App = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewStartHour, setViewStartHour] = useState(8);
   const [activeView, setActiveView] = useState('grid');
-  const [selectedRoomIds] = useState(INITIAL_ROOMS.map(r => r.id));
   const [lastUpdated, setLastUpdated] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [apiRooms, setApiRooms] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showDebug, setShowDebug] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState({});
 
   const visibleHoursCount = 12;
+
+  const toggleGroup = (groupId) => {
+    setCollapsedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -130,10 +148,16 @@ const App = () => {
     return ((hour - viewStartHour) / visibleHoursCount) * 100;
   }, [currentDate, viewStartHour]);
 
-  const filteredRooms = INITIAL_ROOMS.filter(room => selectedRoomIds.includes(room.id));
   const currentDateMelb = getMelbDate(currentDate);
   const rowHeight = 64;
-  const totalHeight = filteredRooms.length * rowHeight;
+  const groupHeaderHeight = 36;
+
+  // Calculate total height accounting for collapsed groups
+  const totalHeight = ROOM_GROUPS.reduce((acc, group) => {
+    acc += groupHeaderHeight;
+    if (!collapsedGroups[group.id]) acc += group.rooms.length * rowHeight;
+    return acc;
+  }, 0);
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -216,11 +240,29 @@ const App = () => {
               {/* Scrollable body */}
               <div className="flex overflow-y-auto scrollbar-hide" style={{ height: 'calc(100% - 3rem)' }}>
 
-                {/* Left: room labels */}
+                {/* Left: room labels with group headers */}
                 <div className="w-48 shrink-0 border-r border-slate-200 bg-slate-50/50" style={{ minHeight: `${totalHeight}px` }}>
-                  {filteredRooms.map(room => (
-                    <div key={room.id} className="border-b border-slate-100 px-4 flex items-center hover:bg-slate-50/50 transition-colors" style={{ height: `${rowHeight}px` }}>
-                      <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate leading-tight">{room.displayName}</span>
+                  {ROOM_GROUPS.map(group => (
+                    <div key={group.id}>
+                      {/* Group header */}
+                      <button
+                        onClick={() => toggleGroup(group.id)}
+                        className={`w-full flex items-center justify-between px-4 text-white text-[9px] font-black uppercase tracking-widest ${GROUP_COLORS[group.id]}`}
+                        style={{ height: `${groupHeaderHeight}px` }}
+                      >
+                        <span>{group.label}</span>
+                        {collapsedGroups[group.id] ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+                      </button>
+                      {/* Room rows */}
+                      {!collapsedGroups[group.id] && group.rooms.map(room => (
+                        <div
+                          key={room.id}
+                          className="border-b border-slate-100 px-4 flex items-center hover:bg-slate-100/50 transition-colors bg-white"
+                          style={{ height: `${rowHeight}px` }}
+                        >
+                          <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate">{room.displayName}</span>
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
@@ -235,33 +277,45 @@ const App = () => {
                       <div className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm mt-1 transform -translate-x-1/2 uppercase tracking-tighter shadow-sm whitespace-nowrap">NOW</div>
                     </div>
                   )}
-                  {filteredRooms.map((room, idx) => (
-                    <div
-                      key={room.id}
-                      className="flex border-b border-slate-100 relative group overflow-hidden"
-                      style={{ height: `${rowHeight}px`, top: 0 }}
-                    >
-                      {Array.from({ length: visibleHoursCount }).map((_, i) => (
-                        <div key={i} className="flex-1 border-r border-slate-50/50 group-hover:bg-slate-50/10 transition-colors"></div>
+
+                  {/* Render group headers + room rows on the right side too */}
+                  {ROOM_GROUPS.map(group => (
+                    <div key={group.id}>
+                      {/* Group header spacer */}
+                      <div
+                        className={`w-full ${GROUP_COLORS[group.id]} opacity-20`}
+                        style={{ height: `${groupHeaderHeight}px` }}
+                      />
+                      {/* Room event rows */}
+                      {!collapsedGroups[group.id] && group.rooms.map(room => (
+                        <div
+                          key={room.id}
+                          className="flex border-b border-slate-100 relative group overflow-hidden"
+                          style={{ height: `${rowHeight}px` }}
+                        >
+                          {Array.from({ length: visibleHoursCount }).map((_, i) => (
+                            <div key={i} className="flex-1 border-r border-slate-50/50 group-hover:bg-slate-50/10 transition-colors"></div>
+                          ))}
+                          {bookings
+                            .filter(b => {
+                              if (!b.roomNames.includes(room.pcoRoomId) || room.pcoRoomId === "") return false;
+                              return getMelbDate(b.start) === currentDateMelb;
+                            })
+                            .map(b => (
+                              <div
+                                key={b.id}
+                                style={getEventStyle(b)}
+                                className={`absolute top-1 h-14 rounded-xl p-2 shadow-lg border-l-4 border-white/30 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center ${GROUP_COLORS[group.id]}`}
+                              >
+                                <p className="text-[9px] font-black truncate uppercase leading-tight drop-shadow-sm">{b.title}</p>
+                                <p className="text-[7px] font-bold opacity-80 uppercase mt-1 flex items-center gap-1">
+                                  <Clock size={8} className="shrink-0" />
+                                  {new Date(b.start).toLocaleTimeString('en-AU', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })}
+                                </p>
+                              </div>
+                            ))}
+                        </div>
                       ))}
-                      {bookings
-                        .filter(b => {
-                          if (!b.roomNames.includes(room.pcoRoomId) || room.pcoRoomId === "") return false;
-                          return getMelbDate(b.start) === currentDateMelb;
-                        })
-                        .map(b => (
-                          <div
-                            key={b.id}
-                            style={getEventStyle(b)}
-                            className={`absolute top-1 h-14 rounded-xl p-2 shadow-lg border-l-4 border-white/30 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center ${CATEGORY_COLORS[room.category] || 'bg-indigo-600'}`}
-                          >
-                            <p className="text-[9px] font-black truncate uppercase leading-tight drop-shadow-sm">{b.title}</p>
-                            <p className="text-[7px] font-bold opacity-80 uppercase mt-1 flex items-center gap-1">
-                              <Clock size={8} className="shrink-0" />
-                              {new Date(b.start).toLocaleTimeString('en-AU', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })}
-                            </p>
-                          </div>
-                        ))}
                     </div>
                   ))}
                 </div>
