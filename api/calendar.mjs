@@ -26,24 +26,22 @@ export default async function handler(req, res) {
       'User-Agent': 'FGAM-Resource-Planner-v1'
     };
 
-    // Melbourne is UTC+10 (AEST) or UTC+11 (AEDT).
-    // A Melbourne calendar day starts at T13:00:00Z the previous UTC day
-    // and ends at T12:59:59Z the next UTC day.
-    // We fetch this full window and let the frontend filter to the correct day.
-    const prevDay = new Date(date + 'T00:00:00Z');
-    prevDay.setUTCDate(prevDay.getUTCDate() - 1);
-    const startStr = prevDay.toISOString().split('T')[0] + 'T13:00:00Z';
-
+    // Fetch a window that covers the full Melbourne day regardless of DST
+    const startStr = date + 'T00:00:00Z';
     const nextDay = new Date(date + 'T00:00:00Z');
     nextDay.setUTCDate(nextDay.getUTCDate() + 1);
     const endStr = nextDay.toISOString().split('T')[0] + 'T12:59:59Z';
 
-    // Fetch event instances and rooms in parallel
-    const pcoUrl = `https://api.planningcenteronline.com/calendar/v2/event_instances?include=event,resource_bookings&where[starts_at][gte]=${startStr}&where[starts_at][lte]=${endStr}&per_page=100`;
+    const prevDay = new Date(date + 'T00:00:00Z');
+    prevDay.setUTCDate(prevDay.getUTCDate() - 1);
+    const startStrWide = prevDay.toISOString().split('T')[0] + 'T13:00:00Z';
 
-    const [eventRes, roomsRes] = await Promise.all([
+    const pcoUrl = `https://api.planningcenteronline.com/calendar/v2/event_instances?include=event,resource_bookings,tags&where[starts_at][gte]=${startStrWide}&where[starts_at][lte]=${endStr}&per_page=100`;
+
+    const [eventRes, roomsRes, tagsRes] = await Promise.all([
       fetch(pcoUrl, { headers }),
-      fetch('https://api.planningcenteronline.com/calendar/v2/rooms?per_page=100', { headers })
+      fetch('https://api.planningcenteronline.com/calendar/v2/rooms?per_page=100', { headers }),
+      fetch('https://api.planningcenteronline.com/calendar/v2/tags?include=tag_group&per_page=100', { headers })
     ]);
 
     if (!eventRes.ok) {
@@ -56,7 +54,7 @@ export default async function handler(req, res) {
 
     const data = await eventRes.json();
 
-    // Build a resource ID -> room name lookup map
+    // Build resource ID -> room name lookup
     let resourceMap = {};
     if (roomsRes.ok) {
       const roomsData = await roomsRes.json();
@@ -65,49 +63,4 @@ export default async function handler(req, res) {
       }
     }
 
-    // Also check resources endpoint in case rooms are stored there
-    if (Object.keys(resourceMap).length === 0) {
-      try {
-        const resourcesRes = await fetch('https://api.planningcenteronline.com/calendar/v2/resources?per_page=100', { headers });
-        if (resourcesRes.ok) {
-          const resourcesData = await resourcesRes.json();
-          for (const resource of (resourcesData.data || [])) {
-            resourceMap[resource.id] = resource.attributes.name;
-          }
-        }
-      } catch (e) {}
-    }
-
-    // Enrich each instance with resolved room names
-    const instances = (data.data || []).map(instance => {
-      const bookingRefs = instance.relationships?.resource_bookings?.data || [];
-      const roomNames = bookingRefs
-        .map(ref => {
-          const booking = (data.included || []).find(
-            inc => inc.type === 'ResourceBooking' && inc.id === ref.id
-          );
-          if (!booking) return null;
-          const resourceId = booking.relationships?.resource?.data?.id;
-          return resourceId ? (resourceMap[resourceId] || null) : null;
-        })
-        .filter(Boolean);
-
-      return {
-        ...instance,
-        resolvedRooms: [...new Set(roomNames)]
-      };
-    });
-
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', 'application/json');
-    return res.status(200).json({
-      rooms: Object.entries(resourceMap).map(([id, name]) => ({ id, name })),
-      instances,
-      included: data.included || [],
-      range: { start: startStr, end: endStr }
-    });
-
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
-  }
-}
+    if (O
