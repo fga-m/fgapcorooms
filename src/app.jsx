@@ -175,12 +175,20 @@ const App = () => {
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
-            <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() - 1); setCurrentDate(d); }}
+            <button onClick={() => {
+  const d = new Date(currentDate);
+  d.setUTCDate(d.getUTCDate() - 1);
+  setCurrentDate(d);
+}}
               className="p-2 hover:bg-white rounded-xl transition-all"><ChevronLeft size={18} /></button>
             <span className="px-4 font-black text-slate-700 min-w-[160px] text-center text-xs uppercase tracking-tight">
               {currentDate.toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short', day: 'numeric', month: 'short' })}
             </span>
-            <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() + 1); setCurrentDate(d); }}
+            <button onClick={() => {
+  const d = new Date(currentDate);
+  d.setUTCDate(d.getUTCDate() + 1);
+  setCurrentDate(d);
+}}
               className="p-2 hover:bg-white rounded-xl transition-all"><ChevronRight size={18} /></button>
           </div>
           <button onClick={resetToToday} className="px-4 py-2 bg-white hover:bg-slate-50 text-indigo-600 rounded-2xl text-xs font-black uppercase border border-indigo-100 shadow-sm transition-all flex items-center gap-2">
