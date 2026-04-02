@@ -44,16 +44,16 @@ export default async function handler(req, res) {
     let contentType = response.headers.get("content-type");
 
     // 3. Response Handling with debug info on failure
-    if (response.ok && contentType && contentType.includes("application/json")) {
-      data = await response.json();
-    } else {
-      const errorText = await response.text();
-      return res.status(response.status).json({ 
-        error: `PCO Server Error (${response.status})`,
-        url: pcoUrl,
-        details: errorText.slice(0, 500)
-      });
-    }
+    if (response.ok) {
+  data = await response.json();
+} else {
+  const errorText = await response.text();
+  return res.status(response.status).json({ 
+    error: `PCO Server Error (${response.status})`,
+    url: pcoUrl,
+    details: errorText.slice(0, 500)
+  });
+}
 
     // 4. Fetch rooms separately so we have a full room list
     let rooms = [];
