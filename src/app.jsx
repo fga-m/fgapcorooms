@@ -65,13 +65,21 @@ const getMelbHour = (date) => {
 };
 
 const getMelbDate = (date) => {
-  return new Date(date).toLocaleDateString('en-AU', {
-    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit'
-  });
+  return new Date(date).toLocaleDateString('en-CA', { timeZone: TZ });
+};
+
+const todayMelbString = () => {
+  return new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+};
+
+const shiftDateString = (dateStr, days) => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d + days));
+  return date.toISOString().split('T')[0];
 };
 
 const App = () => {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(todayMelbString());
   const [viewStartHour, setViewStartHour] = useState(8);
   const [activeView, setActiveView] = useState('grid');
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -92,8 +100,7 @@ const App = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const dateString = currentDate.toISOString().split('T')[0];
-      const response = await fetch(`/api/calendar?date=${dateString}`);
+      const response = await fetch(`/api/calendar?date=${currentDate}`);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `Server Error ${response.status}`);
       setApiRooms(result.rooms || []);
@@ -124,8 +131,8 @@ const App = () => {
   };
 
   const resetToToday = () => {
+    setCurrentDate(todayMelbString());
     const now = new Date();
-    setCurrentDate(now);
     setViewStartHour(Math.max(0, Math.min(24 - visibleHoursCount, Math.floor(getMelbHour(now)) - 1)));
   };
 
@@ -142,13 +149,12 @@ const App = () => {
 
   const nowPos = useMemo(() => {
     const now = new Date();
-    if (getMelbDate(now) !== getMelbDate(currentDate)) return null;
+    if (getMelbDate(now) !== currentDate) return null;
     const hour = getMelbHour(now);
     if (hour < viewStartHour || hour > viewStartHour + visibleHoursCount) return null;
     return ((hour - viewStartHour) / visibleHoursCount) * 100;
   }, [currentDate, viewStartHour]);
 
-  const currentDateMelb = getMelbDate(currentDate);
   const rowHeight = 64;
   const groupHeaderHeight = 36;
 
@@ -180,6 +186,10 @@ const App = () => {
     window.addEventListener('mouseup', onUp);
   };
 
+  const displayDate = new Date(currentDate + 'T12:00:00Z').toLocaleDateString('en-AU', {
+    weekday: 'short', day: 'numeric', month: 'short'
+  });
+
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm shrink-0">
@@ -196,19 +206,17 @@ const App = () => {
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
-            <button onClick={() => {
-              const d = new Date(currentDate);
-              d.setUTCDate(d.getUTCDate() - 1);
-              setCurrentDate(d);
-            }} className="p-2 hover:bg-white rounded-xl transition-all"><ChevronLeft size={18} /></button>
+            <button
+              onClick={() => setCurrentDate(shiftDateString(currentDate, -1))}
+              className="p-2 hover:bg-white rounded-xl transition-all"
+            ><ChevronLeft size={18} /></button>
             <span className="px-4 font-black text-slate-700 min-w-[160px] text-center text-xs uppercase tracking-tight">
-              {currentDate.toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short', day: 'numeric', month: 'short' })}
+              {displayDate}
             </span>
-            <button onClick={() => {
-              const d = new Date(currentDate);
-              d.setUTCDate(d.getUTCDate() + 1);
-              setCurrentDate(d);
-            }} className="p-2 hover:bg-white rounded-xl transition-all"><ChevronRight size={18} /></button>
+            <button
+              onClick={() => setCurrentDate(shiftDateString(currentDate, 1))}
+              className="p-2 hover:bg-white rounded-xl transition-all"
+            ><ChevronRight size={18} /></button>
           </div>
           <button onClick={resetToToday} className="px-4 py-2 bg-white hover:bg-slate-50 text-indigo-600 rounded-2xl text-xs font-black uppercase border border-indigo-100 shadow-sm transition-all flex items-center gap-2">
             <RotateCcw size={14} /> Today
@@ -308,7 +316,6 @@ const App = () => {
 
                   {ROOM_GROUPS.map(group => (
                     <div key={group.id}>
-                      {/* Group header stripe */}
                       <div
                         className={`w-full ${GROUP_COLORS[group.id]} opacity-20`}
                         style={{ height: `${groupHeaderHeight}px` }}
@@ -325,7 +332,7 @@ const App = () => {
                           {bookings
                             .filter(b => {
                               if (!b.roomNames.includes(room.pcoRoomId) || room.pcoRoomId === "") return false;
-                              return getMelbDate(b.start) === currentDateMelb;
+                              return getMelbDate(b.start) === currentDate;
                             })
                             .map(b => (
                               <div
