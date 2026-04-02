@@ -8,8 +8,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing required 'date' query parameter (e.g. ?date=2026-04-02)" });
   }
 
-  const parsedDate = new Date(date);
-  if (isNaN(parsedDate.getTime())) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD (e.g. ?date=2026-04-02)" });
   }
 
@@ -27,14 +26,15 @@ export default async function handler(req, res) {
       'User-Agent': 'FGAM-Resource-Planner-v1'
     };
 
-    // 1. Setup Time Window
-    const startDate = parsedDate;
-    const endDate = new Date(parsedDate);
-    endDate.setDate(startDate.getDate() + 7);
-    const startStr = startDate.toISOString().split('T')[0] + 'T00:00:00Z';
-    const endStr = endDate.toISOString().split('T')[0] + 'T23:59:59Z';
+    // Fetch from midnight UTC on the requested date to 1pm UTC the next day.
+    // This covers a full Melbourne day (UTC+10/+11) regardless of daylight saving.
+    // The frontend filters to the correct Melbourne day using getMelbDate().
+    const startStr = date + 'T00:00:00Z';
+    const nextDay = new Date(date + 'T00:00:00Z');
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+    const endStr = nextDay.toISOString().split('T')[0] + 'T12:59:59Z';
 
-    // 2. Fetch event instances and rooms in parallel
+    // Fetch event instances and rooms in parallel
     const pcoUrl = `https://api.planningcenteronline.com/calendar/v2/event_instances?include=event,resource_bookings&where[starts_at][gte]=${startStr}&where[starts_at][lte]=${endStr}&per_page=100`;
 
     const [eventRes, roomsRes] = await Promise.all([
@@ -52,7 +52,7 @@ export default async function handler(req, res) {
 
     const data = await eventRes.json();
 
-    // 3. Build a resource ID -> room name lookup map
+    // Build a resource ID -> room name lookup map
     let resourceMap = {};
     if (roomsRes.ok) {
       const roomsData = await roomsRes.json();
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4. Also check resources endpoint in case rooms are stored there
+    // Also check resources endpoint in case rooms are stored there
     if (Object.keys(resourceMap).length === 0) {
       try {
         const resourcesRes = await fetch('https://api.planningcenteronline.com/calendar/v2/resources?per_page=100', { headers });
@@ -74,12 +74,11 @@ export default async function handler(req, res) {
       } catch (e) {}
     }
 
-    // 5. Enrich each instance with resolved room names
+    // Enrich each instance with resolved room names
     const instances = (data.data || []).map(instance => {
       const bookingRefs = instance.relationships?.resource_bookings?.data || [];
       const roomNames = bookingRefs
         .map(ref => {
-          // Find the matching ResourceBooking in included
           const booking = (data.included || []).find(
             inc => inc.type === 'ResourceBooking' && inc.id === ref.id
           );
@@ -91,7 +90,7 @@ export default async function handler(req, res) {
 
       return {
         ...instance,
-        resolvedRooms: [...new Set(roomNames)] // deduplicate
+        resolvedRooms: [...new Set(roomNames)]
       };
     });
 
