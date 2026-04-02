@@ -78,8 +78,16 @@ const shiftDateString = (dateStr, days) => {
   return date.toISOString().split('T')[0];
 };
 
-// Convert hex color to a slightly transparent version for event backgrounds
+const darkenHex = (hex, amount = 0.4) => {
+  if (!hex || !hex.startsWith('#')) return hex;
+  const r = Math.floor(parseInt(hex.slice(1, 3), 16) * (1 - amount));
+  const g = Math.floor(parseInt(hex.slice(3, 5), 16) * (1 - amount));
+  const b = Math.floor(parseInt(hex.slice(5, 7), 16) * (1 - amount));
+  return `rgb(${r}, ${g}, ${b})`;
+};
+
 const hexToRgba = (hex, alpha = 0.85) => {
+  if (!hex || !hex.startsWith('#')) return hex;
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
@@ -192,7 +200,6 @@ const App = () => {
     return ((hour - viewStartHour) / visibleHoursCount) * 100;
   }, [currentDate, viewStartHour]);
 
-  // Filter bookings based on active tag filters
   const filteredBookings = useMemo(() => {
     return bookings.filter(b => {
       if (activeDeptFilters.length > 0) {
@@ -335,7 +342,7 @@ const App = () => {
                     key={tag.id}
                     onClick={() => toggleDeptFilter(tag.id)}
                     className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all border-2 ${activeDeptFilters.includes(tag.id) ? 'border-transparent text-white shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
-                    style={activeDeptFilters.includes(tag.id) ? { backgroundColor: tag.color, borderColor: tag.color } : {}}
+                    style={activeDeptFilters.includes(tag.id) ? { backgroundColor: darkenHex(tag.color, 0.3), borderColor: darkenHex(tag.color, 0.3) } : {}}
                   >
                     {tag.name}
                   </button>
@@ -355,7 +362,7 @@ const App = () => {
                     key={tag.id}
                     onClick={() => toggleTypeFilter(tag.id)}
                     className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all border-2 ${activeTypeFilters.includes(tag.id) ? 'border-transparent text-white shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
-                    style={activeTypeFilters.includes(tag.id) ? { backgroundColor: tag.color, borderColor: tag.color } : {}}
+                    style={activeTypeFilters.includes(tag.id) ? { backgroundColor: darkenHex(tag.color, 0.3), borderColor: darkenHex(tag.color, 0.3) } : {}}
                   >
                     {tag.name}
                   </button>
@@ -473,8 +480,8 @@ const App = () => {
                                 key={b.id}
                                 style={{
                                   ...getEventStyle(b),
-                                  backgroundColor: hexToRgba(b.eventColor),
-                                  borderLeftColor: b.eventColor
+                                  backgroundColor: darkenHex(b.eventColor, 0.3),
+                                  borderLeftColor: darkenHex(b.eventColor, 0.5)
                                 }}
                                 className="absolute top-1 h-14 rounded-xl p-2 shadow-lg border-l-4 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center overflow-hidden"
                               >
@@ -506,8 +513,7 @@ const App = () => {
                 .sort((a, b) => new Date(a.start) - new Date(b.start))
                 .map(b => (
                   <div key={b.id} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between gap-4 transition-all hover:shadow-md overflow-hidden relative">
-                    {/* Colour accent bar using event tag colour */}
-                    <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-3xl" style={{ backgroundColor: b.eventColor }} />
+                    <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-3xl" style={{ backgroundColor: darkenHex(b.eventColor, 0.3) }} />
                     <div className="flex items-center gap-4 min-w-0 pl-3">
                       <div className="w-16 h-16 bg-slate-50 rounded-2xl flex flex-col items-center justify-center border border-slate-100 shrink-0">
                         <span className="text-[9px] font-black uppercase text-slate-400">{new Date(b.start).toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short' })}</span>
@@ -533,7 +539,10 @@ const App = () => {
                             <span
                               key={tag.id}
                               className="text-[8px] font-black px-2 py-0.5 rounded-full uppercase"
-                              style={{ backgroundColor: tag.color + '33', color: tag.color }}
+                              style={{
+                                backgroundColor: hexToRgba(tag.color, 0.15),
+                                color: darkenHex(tag.color, 0.4)
+                              }}
                             >
                               {tag.name}
                             </span>
@@ -542,7 +551,10 @@ const App = () => {
                             <span
                               key={tag.id}
                               className="text-[8px] font-black px-2 py-0.5 rounded-full uppercase border"
-                              style={{ borderColor: tag.color + '66', color: tag.color }}
+                              style={{
+                                borderColor: hexToRgba(tag.color, 0.5),
+                                color: darkenHex(tag.color, 0.4)
+                              }}
                             >
                               {tag.name}
                             </span>
