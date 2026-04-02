@@ -26,10 +26,14 @@ export default async function handler(req, res) {
       'User-Agent': 'FGAM-Resource-Planner-v1'
     };
 
-    // Fetch from midnight UTC on the requested date to 1pm UTC the next day.
-    // This covers a full Melbourne day (UTC+10/+11) regardless of daylight saving.
-    // The frontend filters to the correct Melbourne day using getMelbDate().
-    const startStr = date + 'T00:00:00Z';
+    // Melbourne is UTC+10 (AEST) or UTC+11 (AEDT).
+    // A Melbourne calendar day starts at T13:00:00Z the previous UTC day
+    // and ends at T12:59:59Z the next UTC day.
+    // We fetch this full window and let the frontend filter to the correct day.
+    const prevDay = new Date(date + 'T00:00:00Z');
+    prevDay.setUTCDate(prevDay.getUTCDate() - 1);
+    const startStr = prevDay.toISOString().split('T')[0] + 'T13:00:00Z';
+
     const nextDay = new Date(date + 'T00:00:00Z');
     nextDay.setUTCDate(nextDay.getUTCDate() + 1);
     const endStr = nextDay.toISOString().split('T')[0] + 'T12:59:59Z';
