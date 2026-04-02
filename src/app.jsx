@@ -22,9 +22,9 @@ import {
 /**
  * PCO RESOURCE DASHBOARD - FGAM VERSION
  * * SETUP INSTRUCTIONS:
- * 1. Deploy this code along with the api/calendar.js proxy.
- * 2. Click the "Bug" icon in the top right to open Discovery Mode.
- * 3. Copy the numerical IDs for your rooms and paste them into 'pcoResourceId' below.
+ * 1. Ensure api/calendar.js is using the "Pure Proxy" version.
+ * 2. Deploy and check for the "Bug" icon to find your Room IDs.
+ * 3. Copy IDs into 'pcoResourceId' in the INITIAL_ROOMS array below.
  */
 
 const INITIAL_ROOMS = [
@@ -69,29 +69,38 @@ const App = () => {
     setError(null);
     try {
       const dateString = currentDate.toISOString().split('T')[0];
+      // We fetch from our Vercel Proxy
       const response = await fetch(`/api/calendar?date=${dateString}`);
       const result = await response.json();
       
-      if (!response.ok) throw new Error(result.error || 'Connection Failed');
+      if (!response.ok) {
+        // If the proxy returned an error object, use that message
+        throw new Error(result.error || `API Server returned ${response.status}`);
+      }
       
-      // Store raw resources for the Bug/Discovery menu
+      // 1. Process Resources (Found in 'included' if using ?include=resource)
       const rawResources = (result.included || []).filter(item => item.type === 'Resource');
       setApiResources(rawResources);
 
-      // Filter and map bookings for the specific date
+      // 2. Process Bookings (Found in 'data')
       const mappedBookings = (result.data || [])
-        .filter(b => b.attributes.starts_at.startsWith(dateString))
+        .filter(b => {
+          // Double check the date matches (some API filters are loose)
+          const bStart = b.attributes?.starts_at || "";
+          return bStart.startsWith(dateString);
+        })
         .map(b => ({
           id: b.id,
-          title: b.attributes.event_name || "Untitled Event",
-          start: b.attributes.starts_at,
-          end: b.attributes.ends_at,
+          title: b.attributes?.event_name || "Untitled Event",
+          start: b.attributes?.starts_at,
+          end: b.attributes?.ends_at,
           pcoResourceId: b.relationships?.resource?.data?.id
         }));
 
       setBookings(mappedBookings);
       setLastUpdated(new Date());
     } catch (err) {
+      console.error("Fetch Error:", err);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -151,10 +160,10 @@ const App = () => {
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm shrink-0">
         <div className="flex items-center gap-3">
-          <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg"><Zap size={24} /></div>
+          <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg shadow-indigo-100/50"><Zap size={24} /></div>
           <div>
-            <h1 className="text-xl font-black uppercase tracking-tight italic">Resource Dashboard</h1>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2">
+            <h1 className="text-xl font-black uppercase tracking-tight italic text-slate-800">Resource Planner</h1>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2 leading-none mt-1">
               {bookings.length} Events Synced
               {lastUpdated && <span className="opacity-40">· {lastUpdated.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>}
             </p>
@@ -165,13 +174,13 @@ const App = () => {
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
                 <button onClick={() => {
                     const d = new Date(currentDate); d.setDate(d.getDate() - 1); setCurrentDate(d);
-                }} className="p-2 hover:bg-white rounded-xl transition-all shadow-none hover:shadow-sm"><ChevronLeft size={18} /></button>
+                }} className="p-2 hover:bg-white rounded-xl transition-all"><ChevronLeft size={18} /></button>
                 <span className="px-4 font-black text-slate-700 min-w-[160px] text-center text-xs uppercase tracking-tight">
                     {currentDate.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
                 </span>
                 <button onClick={() => {
                     const d = new Date(currentDate); d.setDate(d.getDate() + 1); setCurrentDate(d);
-                }} className="p-2 hover:bg-white rounded-xl transition-all shadow-none hover:shadow-sm"><ChevronRight size={18} /></button>
+                }} className="p-2 hover:bg-white rounded-xl transition-all"><ChevronRight size={18} /></button>
             </div>
             <button onClick={resetToToday} className="px-4 py-2 bg-white hover:bg-slate-50 text-indigo-600 rounded-2xl text-xs font-black uppercase border border-indigo-100 shadow-sm transition-all flex items-center gap-2">
               <RotateCcw size={14} /> Today
@@ -181,40 +190,25 @@ const App = () => {
         <div className="flex items-center gap-3">
           <button onClick={() => setIsRoomSelectorOpen(true)} className="p-2 bg-white text-slate-400 hover:text-slate-600 rounded-xl border border-slate-200 shadow-sm transition-all"><Settings size={20}/></button>
           <button onClick={() => setShowDebug(!showDebug)} className={`p-2 rounded-xl border transition-all ${showDebug ? 'bg-amber-100 border-amber-300 text-amber-700 shadow-inner' : 'bg-white border-slate-200 text-slate-400 shadow-sm'}`}><Bug size={20} /></button>
-          <button onClick={fetchData} className={`p-2 bg-white rounded-xl border border-slate-200 shadow-sm ${isLoading ? 'animate-spin text-indigo-500 border-indigo-200' : 'text-slate-400 hover:text-indigo-600'}`}><RefreshCw size={20} /></button>
+          <button onClick={fetchData} className={`p-2 bg-white rounded-xl border border-slate-200 shadow-sm ${isLoading ? 'animate-spin text-indigo-500' : 'text-slate-400 hover:text-indigo-600'}`}><RefreshCw size={20} /></button>
         </div>
       </header>
 
       <main className="flex-1 overflow-hidden flex flex-col relative">
         {error && (
-          <div className="bg-rose-50 border-b border-rose-100 p-3 flex items-center justify-center gap-2 text-rose-800 text-[10px] font-black uppercase shrink-0">
-            <AlertCircle size={14} /> System Error: {error}
+          <div className="bg-rose-50 border-b border-rose-100 p-3 flex flex-col items-center justify-center gap-1 text-rose-800 shrink-0">
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase">
+                <AlertCircle size={14} /> System Error
+            </div>
+            <p className="text-[9px] font-medium opacity-70 italic">{error}</p>
           </div>
         )}
-
-        <div className="bg-white border-b border-slate-200 p-4 flex flex-wrap items-center gap-4 shrink-0">
-          <div className="relative flex-1 min-w-[280px]">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search resource names..." 
-              className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm font-medium focus:ring-2 focus:ring-indigo-100 transition-all"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div className="flex gap-2">
-            {categories.map(cat => (
-              <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 text-xs font-black rounded-xl border transition-all uppercase tracking-widest ${selectedCategory === cat ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white text-slate-500 hover:bg-slate-50 border-slate-200'}`}>{cat}</button>
-            ))}
-          </div>
-        </div>
 
         <div className="flex-1 flex overflow-hidden bg-slate-100/50 p-6">
           <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-1">
             <div className="w-64 shrink-0 bg-slate-50/50 border-r border-slate-200 flex flex-col">
               <div className="h-16 border-b border-slate-200 flex items-center justify-between px-6 bg-slate-100/50">
-                <span className="uppercase tracking-widest text-[9px] font-black text-slate-400">Resources</span>
+                <span className="uppercase tracking-widest text-[9px] font-black text-slate-400">Resource List</span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => shiftTime(-1)} disabled={viewStartHour === 0} className="p-1 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 text-slate-400 disabled:opacity-20"><ArrowLeft size={14}/></button>
                   <button onClick={() => shiftTime(1)} disabled={viewStartHour >= 16} className="p-1 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 text-slate-400 disabled:opacity-20"><ArrowRight size={14}/></button>
@@ -271,7 +265,7 @@ const App = () => {
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
               <div className="p-8 border-b flex items-center justify-between bg-slate-50">
-                <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Visible Resources</h3>
+                <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Room Visibility</h3>
                 <button onClick={() => setIsRoomSelectorOpen(false)} className="p-2 hover:bg-white rounded-full text-slate-400 hover:text-slate-600 transition-colors"><X size={20}/></button>
               </div>
               <div className="flex-1 overflow-auto p-6 space-y-2 bg-white">
@@ -281,14 +275,14 @@ const App = () => {
                       ? selectedRoomIds.filter(id => id !== room.id)
                       : [...selectedRoomIds, room.id];
                     setSelectedRoomIds(newIds);
-                  }} className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${selectedRoomIds.includes(room.id) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}>
+                  }} className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${selectedRoomIds.includes(room.id) ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}>
                     <div className="text-left font-black text-xs uppercase tracking-tight">{room.displayName}</div>
                     {selectedRoomIds.includes(room.id) && <div className="bg-indigo-600 p-1 rounded-full text-white"><Check size={12} strokeWidth={4} /></div>}
                   </button>
                 ))}
               </div>
               <div className="p-8 bg-slate-50 border-t">
-                <button onClick={() => setIsRoomSelectorOpen(false)} className="w-full py-4 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all">Update View</button>
+                <button onClick={() => setIsRoomSelectorOpen(false)} className="w-full py-4 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all">Save Layout</button>
               </div>
             </div>
           </div>
@@ -297,19 +291,24 @@ const App = () => {
         {showDebug && (
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-amber-400 z-[100] h-96 overflow-hidden shadow-2xl flex flex-col p-8 animate-in slide-in-from-bottom-full duration-500">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="font-black text-amber-900 uppercase text-xs flex items-center gap-3"><Bug size={18} className="text-amber-500"/> PCO Discovery Menu</h2>
+              <h2 className="font-black text-amber-900 uppercase text-xs flex items-center gap-3"><Bug size={18} className="text-amber-500"/> PCO Room Discovery</h2>
               <button onClick={() => setShowDebug(false)} className="text-amber-500 font-black hover:text-amber-700 text-xs uppercase">Close</button>
             </div>
             <div className="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-8">
               {apiResources.length > 0 ? apiResources.map(res => (
                 <div key={res.id} className="p-4 rounded-2xl border-2 border-slate-100 bg-white flex items-center justify-between hover:border-amber-100 transition-all shadow-sm">
                   <div className="overflow-hidden pr-4">
-                    <p className="font-black text-[11px] text-slate-800 truncate uppercase">{res.attributes.name}</p>
+                    <p className="font-black text-[11px] text-slate-800 truncate uppercase">{res.attributes?.name || 'Unnamed Resource'}</p>
                     <code className="text-[10px] font-mono text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded mt-1 inline-block">ID: {res.id}</code>
                   </div>
                   <button onClick={() => { navigator.clipboard.writeText(res.id); alert(`ID ${res.id} copied!`); }} className="p-2.5 bg-slate-50 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 text-slate-400 hover:text-indigo-600 transition-all shadow-sm"><CheckCircle2 size={18}/></button>
                 </div>
-              )) : <p className="col-span-full text-center py-20 text-slate-400 font-bold uppercase text-[10px] tracking-widest">No API Resources Detected. Confirm Vercel credentials are set.</p>}
+              )) : (
+                <div className="col-span-full py-20 flex flex-col items-center gap-3 opacity-40">
+                    <RefreshCw className="animate-spin" size={32} />
+                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Awaiting API Data...</p>
+                </div>
+              )}
             </div>
           </div>
         )}
