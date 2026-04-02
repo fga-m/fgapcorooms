@@ -228,13 +228,9 @@ const App = () => {
                 {/* Left: room labels */}
                 <div className="w-48 shrink-0 border-r border-slate-200 bg-slate-50/50">
                   {filteredRooms.map(room => (
-                    <div key={room.id} className="h-16 border-b border-slate-100 px-4 flex flex-col justify-center hover:bg-slate-50/50 transition-colors">
-                      <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate leading-tight">{room.displayName}</span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[7px] font-black px-1.5 py-0.5 rounded text-white uppercase ${CATEGORY_COLORS[room.category] || 'bg-slate-400'}`}>{room.category}</span>
-                        <span className="text-[8px] font-bold text-slate-400 flex items-center gap-1"><Users size={9} /> {room.capacity}</span>
-                      </div>
-                    </div>
+                    <div key={room.id} className="h-16 border-b border-slate-100 px-4 flex items-center hover:bg-slate-50/50 transition-colors">
+  <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate leading-tight">{room.displayName}</span>
+</div>
                   ))}
                 </div>
 
