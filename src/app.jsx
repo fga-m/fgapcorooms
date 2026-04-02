@@ -223,10 +223,10 @@ const App = () => {
               </div>
 
               {/* Scrollable body */}
-              <div className="flex flex-1 overflow-y-auto scrollbar-hide">
+              <div className="flex overflow-y-auto scrollbar-hide" style={{height: 'calc(100% - 3rem)'}}>
 
                 {/* Left: room labels */}
-                <div className="w-48 shrink-0 border-r border-slate-200 bg-slate-50/50">
+                <div className="w-48 shrink-0 border-r border-slate-200 bg-slate-50/50 self-stretch">
                   {filteredRooms.map(room => (
                     <div key={room.id} className="h-16 border-b border-slate-100 px-4 flex items-center hover:bg-slate-50/50 transition-colors">
   <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate leading-tight">{room.displayName}</span>
@@ -235,7 +235,7 @@ const App = () => {
                 </div>
 
                 {/* Right: event grid with NOW line inside */}
-                <div className="flex-1 relative bg-white">
+                <div className="flex-1 relative bg-white self-stretch">
                   {nowPos !== null && (
                     <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 shadow-[0_0_15px_rgba(239,68,68,0.4)] pointer-events-none" style={{ left: `${nowPos}%` }}>
                       <div className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm mt-2 transform -translate-x-1/2 uppercase tracking-tighter shadow-sm">NOW</div>
