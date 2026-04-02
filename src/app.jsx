@@ -339,7 +339,7 @@ const App = () => {
             {apiRooms.length > 0 ? apiRooms.map(res => (
               <div key={res.id} className="p-4 rounded-2xl border-2 border-slate-100 bg-white flex items-center justify-between hover:border-amber-100 transition-all shadow-sm">
                 <div className="overflow-hidden pr-4">
-                  <p className="font-black text-[11px] text-slate-800 truncate uppercase tracking-tight leading-none">{res.attributes?.name || 'Unnamed'}</p>
+                  <p className="font-black text-[11px] text-slate-800 truncate uppercase tracking-tight leading-none">{res.name || res.attributes?.name || 'Unnamed'}</p>
                   <code className="text-[10px] font-mono text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded mt-2 inline-block">ID: {res.id}</code>
                 </div>
                 <button onClick={() => { navigator.clipboard.writeText(res.id); alert(`ID ${res.id} copied!`); }} className="p-2.5 bg-slate-50 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 text-slate-400 hover:text-indigo-600 transition-all shadow-sm"><CheckCircle2 size={18}/></button>
