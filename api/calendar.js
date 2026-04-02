@@ -1,9 +1,9 @@
 /**
  * api/calendar.js
- * ENHANCED DIAGNOSTIC VERSION
- * 1. Fetches a 7-day range for better visibility of upcoming events.
- * 2. Handles room 404s gracefully to prevent app crashes.
- * 3. Uses standard PCO ISO 8601 UTC date filtering.
+ * ULTRA-ROBUST CALENDAR VERSION
+ * 1. Removes 'rooms' from mandatory includes to prevent 404s.
+ * 2. Fetches raw event instances for the next 7 days.
+ * 3. Provides detailed diagnostic info if Planning Center rejects the request.
  */
 export default async function handler(req, res) {
   const { date } = req.query;
@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
   if (!appId || !secret) {
     return res.status(401).json({ 
-      error: "Missing API Keys. Ensure PCO_APP_ID and PCO_SECRET are set in Vercel settings." 
+      error: "Credentials missing. Ensure PCO_APP_ID and PCO_SECRET are set in Vercel." 
     });
   }
 
@@ -23,56 +23,62 @@ export default async function handler(req, res) {
       'Content-Type': 'application/json'
     };
 
-    // 1. Fetch Rooms (Optional)
-    // We wrap this in a try/catch so if PCO returns a 404 for rooms, 
-    // the rest of the calendar data can still load.
-    let rooms = [];
-    try {
-      const roomsRes = await fetch('https://api.planningcenteronline.com/calendar/v1/rooms?per_page=100', { headers });
-      if (roomsRes.ok) {
-        const roomsData = await roomsRes.json();
-        rooms = roomsData.data || [];
-      } else {
-        console.warn(`Rooms endpoint returned ${roomsRes.status}. Continuing with events only.`);
-      }
-    } catch (e) {
-      console.error("Room fetch failed:", e.message);
-    }
-
-    // 2. Setup 7-Day Range for Events
+    // 1. Setup 7-Day Window
     const startDate = new Date(date);
     const endDate = new Date(date);
     endDate.setDate(startDate.getDate() + 7);
 
+    // PCO requires ISO strings for the where filter
     const startStr = startDate.toISOString().split('T')[0] + 'T00:00:00Z';
     const endStr = endDate.toISOString().split('T')[0] + 'T23:59:59Z';
     
-    // 3. Fetch Event Instances
-    // We include 'event' for titles and 'rooms' for location metadata
-    const instancesRes = await fetch(
-      `https://api.planningcenteronline.com/calendar/v1/event_instances?include=event,rooms&where[starts_at][gte]=${startStr}&where[starts_at][lte]=${endStr}&per_page=100`,
-      { headers }
-    );
+    // 2. Fetch Event Instances
+    // FIX: We removed 'rooms' from include. If 'Rooms' aren't enabled in PCO Calendar, 
+    // including them in the query causes a 404 error for the whole request.
+    const pcoUrl = `https://api.planningcenteronline.com/calendar/v1/event_instances?include=event&where[starts_at][gte]=${startStr}&where[starts_at][lte]=${endStr}&per_page=100`;
+    
+    const response = await fetch(pcoUrl, { headers });
 
-    if (!instancesRes.ok) {
-      const errText = await instancesRes.text();
-      return res.status(instancesRes.status).json({ 
-        error: `PCO Instances Error: ${instancesRes.status}`, 
-        details: errText 
-      });
+    if (!response.ok) {
+      const errorDetail = await response.text();
+      // If the specific filtered URL 404s, try a fallback to just 'future' events
+      if (response.status === 404) {
+          const fallbackUrl = `https://api.planningcenteronline.com/calendar/v1/event_instances?include=event&filter=future&per_page=50`;
+          const fallbackRes = await fetch(fallbackUrl, { headers });
+          if (fallbackRes.ok) {
+              const fallbackData = await fallbackRes.json();
+              return res.status(200).json({
+                  instances: fallbackData.data || [],
+                  included: fallbackData.included || [],
+                  note: "Filtered query failed (404), showing all future events instead."
+              });
+          }
+      }
+      throw new Error(`PCO API Error: ${response.status} - ${errorDetail}`);
     }
     
-    const instancesData = await instancesRes.json();
+    const data = await response.json();
 
-    // 4. Return combined data
+    // 3. Optional: Try to fetch rooms separately so we don't crash the main feed
+    let rooms = [];
+    try {
+        const roomsRes = await fetch('https://api.planningcenteronline.com/calendar/v1/rooms', { headers });
+        if (roomsRes.ok) {
+            const rData = await roomsRes.json();
+            rooms = rData.data || [];
+        }
+    } catch (e) {
+        // Silently fail rooms, we care about the events right now
+    }
+
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 's-maxage=1, stale-while-revalidate');
 
     return res.status(200).json({
         rooms: rooms,
-        instances: instancesData.data || [],
-        included: instancesData.included || [],
+        instances: data.data || [],
+        included: data.included || [],
         range: { start: startStr, end: endStr }
     });
 
