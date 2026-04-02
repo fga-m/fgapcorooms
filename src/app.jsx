@@ -89,6 +89,7 @@ const App = () => {
   const [error, setError] = useState(null);
   const [showDebug, setShowDebug] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState({});
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const visibleHoursCount = 12;
 
