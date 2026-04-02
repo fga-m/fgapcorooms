@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     const headers = { 
       'Authorization': `Basic ${auth}`,
       'Accept': 'application/json',
-      'User-Agent': 'FGAM-Resource-Planner-v1'
+      'User-Agent': 'FGAM-Resource-Planner-v2'
     };
 
     // 1. Setup Time Window
@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     const endStr = endDate.toISOString().split('T')[0] + 'T23:59:59Z';
     
     // 2. Build URL manually to ensure PCO compatibility
-    const pcoUrl = `https://api.planningcenteronline.com/calendar/v1/event_instances?include=event&where[starts_at][gte]=${startStr}&where[starts_at][lte]=${endStr}&per_page=100`;
+    const pcoUrl = `https://api.planningcenteronline.com/calendar/v2/event_instances?include=event&where[starts_at][gte]=${startStr}&where[starts_at][lte]=${endStr}&per_page=100`;
     
     let response = await fetch(pcoUrl, { headers });
     let data = null;
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
       data = await response.json();
     } else {
       // Fallback to simple Events endpoint
-      const fallbackUrl = `https://api.planningcenteronline.com/calendar/v1/events?per_page=50`;
+      const fallbackUrl = `https://api.planningcenteronline.com/calendar/v2/events?per_page=50`;
       const fallbackRes = await fetch(fallbackUrl, { headers });
       
       if (fallbackRes.ok) {
@@ -81,7 +81,7 @@ export default async function handler(req, res) {
     // 4. Fetch rooms separately (non-blocking)
     let rooms = [];
     try {
-      const roomsRes = await fetch('https://api.planningcenteronline.com/calendar/v1/rooms', { headers });
+      const roomsRes = await fetch('https://api.planningcenteronline.com/calendar/v2/rooms', { headers });
       if (roomsRes.ok) {
         const rData = await roomsRes.json();
         rooms = rData.data || [];
