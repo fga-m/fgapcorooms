@@ -11,38 +11,38 @@ const ROOM_GROUPS = [
     id: 'level2',
     label: 'Level 2',
     rooms: [
-      { id: 'r1', pcoRoomId: 'Level 2 - Sanctuary', displayName: 'Sanctuary' },
-      { id: 'r2', pcoRoomId: 'Level 2 - Main Lobby', displayName: 'Main Lobby' },
-      { id: 'r3', pcoRoomId: 'Level 2 - Multipurpose Room', displayName: 'Multipurpose Room' },
-      { id: 'r4', pcoRoomId: 'Level 2 - Meeting Room 1', displayName: 'Meeting Room 1' },
-      { id: 'r5', pcoRoomId: 'Level 2 - Meeting Room 2', displayName: 'Meeting Room 2' },
-      { id: 'r6', pcoRoomId: 'Level 2 - Meeting Room 3', displayName: 'Meeting Room 3' },
-      { id: 'r7', pcoRoomId: 'Level 2 - Meeting Room 5', displayName: 'Meeting Room 5' },
-      { id: 'r8', pcoRoomId: 'Level 2 - Commercial Kitchen', displayName: 'Commercial Kitchen' },
-      { id: 'r9', pcoRoomId: 'Level 2 - Backstage Area', displayName: 'Backstage Area' },
-      { id: 'r10', pcoRoomId: 'Level 2 - Guest Central', displayName: 'Guest Central' },
+      { id: 'r1', pcoRoomId: 'Level 2 - Sanctuary', displayName: 'Sanctuary', shortName: 'Sanct.' },
+      { id: 'r2', pcoRoomId: 'Level 2 - Main Lobby', displayName: 'Main Lobby', shortName: 'Lobby' },
+      { id: 'r3', pcoRoomId: 'Level 2 - Multipurpose Room', displayName: 'Multipurpose Room', shortName: 'MP Room' },
+      { id: 'r4', pcoRoomId: 'Level 2 - Meeting Room 1', displayName: 'Meeting Room 1', shortName: 'MR 1' },
+      { id: 'r5', pcoRoomId: 'Level 2 - Meeting Room 2', displayName: 'Meeting Room 2', shortName: 'MR 2' },
+      { id: 'r6', pcoRoomId: 'Level 2 - Meeting Room 3', displayName: 'Meeting Room 3', shortName: 'MR 3' },
+      { id: 'r7', pcoRoomId: 'Level 2 - Meeting Room 5', displayName: 'Meeting Room 5', shortName: 'MR 5' },
+      { id: 'r8', pcoRoomId: 'Level 2 - Commercial Kitchen', displayName: 'Commercial Kitchen', shortName: 'Kitchen' },
+      { id: 'r9', pcoRoomId: 'Level 2 - Backstage Area', displayName: 'Backstage Area', shortName: 'Backstage' },
+      { id: 'r10', pcoRoomId: 'Level 2 - Guest Central', displayName: 'Guest Central', shortName: 'Guest Ctrl' },
     ]
   },
   {
     id: 'level1',
     label: 'Level 1',
     rooms: [
-      { id: 'r11', pcoRoomId: 'Level 1 - Large Meeting Room ', displayName: 'Large Meeting Room' },
-      { id: 'r12', pcoRoomId: 'Level 1 - Open Office Area', displayName: 'Open Office Area' },
-      { id: 'r13', pcoRoomId: "Level 1 - Chris' Office", displayName: "Chris' Office" },
-      { id: 'r14', pcoRoomId: 'Level 1 - Staff Kitchen', displayName: 'Staff Kitchen' },
-      { id: 'r15', pcoRoomId: 'Level 1 - REACH Office', displayName: 'REACH Office' },
-      { id: 'r16', pcoRoomId: 'Covered rooftop carpark', displayName: 'Rooftop Carpark' },
+      { id: 'r11', pcoRoomId: 'Level 1 - Large Meeting Room ', displayName: 'Large Meeting Room', shortName: 'Large MR' },
+      { id: 'r12', pcoRoomId: 'Level 1 - Open Office Area', displayName: 'Open Office Area', shortName: 'Open Office' },
+      { id: 'r13', pcoRoomId: "Level 1 - Chris' Office", displayName: "Chris' Office", shortName: "Chris' Off." },
+      { id: 'r14', pcoRoomId: 'Level 1 - Staff Kitchen', displayName: 'Staff Kitchen', shortName: 'St. Kitchen' },
+      { id: 'r15', pcoRoomId: 'Level 1 - REACH Office', displayName: 'REACH Office', shortName: 'REACH' },
+      { id: 'r16', pcoRoomId: 'Covered rooftop carpark', displayName: 'Rooftop Carpark', shortName: 'Rooftop' },
     ]
   },
   {
     id: 'online',
     label: 'Online',
     rooms: [
-      { id: 'r17', pcoRoomId: '/zoom', displayName: 'Zoom 1' },
-      { id: 'r18', pcoRoomId: '/zoom2', displayName: 'Zoom 2' },
-      { id: 'r19', pcoRoomId: '/zoom3', displayName: 'Zoom 3' },
-      { id: 'r20', pcoRoomId: '/zoom4', displayName: 'Zoom 4' },
+      { id: 'r17', pcoRoomId: '/zoom', displayName: 'Zoom 1', shortName: 'Z1' },
+      { id: 'r18', pcoRoomId: '/zoom2', displayName: 'Zoom 2', shortName: 'Z2' },
+      { id: 'r19', pcoRoomId: '/zoom3', displayName: 'Zoom 3', shortName: 'Z3' },
+      { id: 'r20', pcoRoomId: '/zoom4', displayName: 'Zoom 4', shortName: 'Z4' },
     ]
   }
 ];
@@ -426,8 +426,9 @@ const App = () => {
                         </button>
                         {!collapsedGroups[group.id] && group.rooms.map(room => (
                           <div key={room.id} className="border-b border-slate-100 px-4 flex items-center hover:bg-slate-100/50 transition-colors bg-white" style={{ height: `${rowHeight}px` }}>
-                            <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate">{room.displayName}</span>
-                          </div>
+  <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate hidden md:block">{room.displayName}</span>
+  <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate md:hidden">{room.shortName}</span>
+</div>
                         ))}
                       </div>
                     ))}
