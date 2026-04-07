@@ -97,7 +97,7 @@ const hexToRgba = (hex, alpha = 0.85) => {
 const App = () => {
   const [currentDate, setCurrentDate] = useState(todayMelbString());
   const [viewStartHour, setViewStartHour] = useState(8);
-  const [activeView, setActiveView] = useState('feed');
+  const [activeView, setActiveView] = useState('grid');
   const [lastUpdated, setLastUpdated] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [apiRooms, setApiRooms] = useState([]);
