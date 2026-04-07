@@ -13,13 +13,13 @@ const ROOM_GROUPS = [
     rooms: [
       { id: 'r1', pcoRoomId: 'Level 2 - Sanctuary', displayName: 'Sanctuary', shortName: 'Sanct.' },
       { id: 'r2', pcoRoomId: 'Level 2 - Main Lobby', displayName: 'Main Lobby', shortName: 'Lobby' },
-      { id: 'r3', pcoRoomId: 'Level 2 - Multipurpose Room', displayName: 'Multipurpose Room', shortName: 'MP Room' },
+      { id: 'r3', pcoRoomId: 'Level 2 - Multipurpose Room', displayName: 'Multipurpose Room', shortName: 'MP' },
       { id: 'r4', pcoRoomId: 'Level 2 - Meeting Room 1', displayName: 'Meeting Room 1', shortName: 'MR 1' },
       { id: 'r5', pcoRoomId: 'Level 2 - Meeting Room 2', displayName: 'Meeting Room 2', shortName: 'MR 2' },
       { id: 'r6', pcoRoomId: 'Level 2 - Meeting Room 3', displayName: 'Meeting Room 3', shortName: 'MR 3' },
       { id: 'r7', pcoRoomId: 'Level 2 - Meeting Room 5', displayName: 'Meeting Room 5', shortName: 'MR 5' },
       { id: 'r8', pcoRoomId: 'Level 2 - Commercial Kitchen', displayName: 'Commercial Kitchen', shortName: 'Kitchen' },
-      { id: 'r9', pcoRoomId: 'Level 2 - Backstage Area', displayName: 'Backstage Area', shortName: 'Backstage' },
+      { id: 'r9', pcoRoomId: 'Level 2 - Backstage Area', displayName: 'Backstage Area', shortName: 'Backstg' },
       { id: 'r10', pcoRoomId: 'Level 2 - Guest Central', displayName: 'Guest Central', shortName: 'Guest Ctrl' },
     ]
   },
@@ -28,9 +28,9 @@ const ROOM_GROUPS = [
     label: 'Level 1',
     rooms: [
       { id: 'r11', pcoRoomId: 'Level 1 - Large Meeting Room ', displayName: 'Large Meeting Room', shortName: 'Large MR' },
-      { id: 'r12', pcoRoomId: 'Level 1 - Open Office Area', displayName: 'Open Office Area', shortName: 'Open Office' },
-      { id: 'r13', pcoRoomId: "Level 1 - Chris' Office", displayName: "Chris' Office", shortName: "Chris' Off." },
-      { id: 'r14', pcoRoomId: 'Level 1 - Staff Kitchen', displayName: 'Staff Kitchen', shortName: 'St. Kitchen' },
+      { id: 'r12', pcoRoomId: 'Level 1 - Open Office Area', displayName: 'Open Office Area', shortName: 'Open O.' },
+      { id: 'r13', pcoRoomId: "Level 1 - Chris' Office", displayName: "Chris' Office", shortName: "Chris' O." },
+      { id: 'r14', pcoRoomId: 'Level 1 - Staff Kitchen', displayName: 'Staff Kitchen', shortName: 'Staff Kit.' },
       { id: 'r15', pcoRoomId: 'Level 1 - REACH Office', displayName: 'REACH Office', shortName: 'REACH' },
       { id: 'r16', pcoRoomId: 'Covered rooftop carpark', displayName: 'Rooftop Carpark', shortName: 'Rooftop' },
     ]
