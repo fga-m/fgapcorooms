@@ -13,14 +13,14 @@ const ROOM_GROUPS = [
     rooms: [
       { id: 'r1', pcoRoomId: 'Level 2 - Sanctuary', displayName: 'Sanctuary', shortName: 'Sanct.' },
       { id: 'r2', pcoRoomId: 'Level 2 - Main Lobby', displayName: 'Main Lobby', shortName: 'Lobby' },
-      { id: 'r3', pcoRoomId: 'Level 2 - Multipurpose Room', displayName: 'Multipurpose Room', shortName: 'MP' },
+      { id: 'r3', pcoRoomId: 'Level 2 - Multipurpose Room', displayName: 'Multipurpose Room', shortName: 'MP Room' },
       { id: 'r4', pcoRoomId: 'Level 2 - Meeting Room 1', displayName: 'Meeting Room 1', shortName: 'MR 1' },
       { id: 'r5', pcoRoomId: 'Level 2 - Meeting Room 2', displayName: 'Meeting Room 2', shortName: 'MR 2' },
       { id: 'r6', pcoRoomId: 'Level 2 - Meeting Room 3', displayName: 'Meeting Room 3', shortName: 'MR 3' },
       { id: 'r7', pcoRoomId: 'Level 2 - Meeting Room 5', displayName: 'Meeting Room 5', shortName: 'MR 5' },
       { id: 'r8', pcoRoomId: 'Level 2 - Commercial Kitchen', displayName: 'Commercial Kitchen', shortName: 'Kitchen' },
-      { id: 'r9', pcoRoomId: 'Level 2 - Backstage Area', displayName: 'Backstage Area', shortName: 'Backstg' },
-      { id: 'r10', pcoRoomId: 'Level 2 - Guest Central', displayName: 'Guest Central', shortName: 'Guest Ctrl' },
+      { id: 'r9', pcoRoomId: 'Level 2 - Backstage Area', displayName: 'Backstage Area', shortName: 'Bkstage' },
+      { id: 'r10', pcoRoomId: 'Level 2 - Guest Central', displayName: 'Guest Central', shortName: 'Guest' },
     ]
   },
   {
@@ -28,9 +28,9 @@ const ROOM_GROUPS = [
     label: 'Level 1',
     rooms: [
       { id: 'r11', pcoRoomId: 'Level 1 - Large Meeting Room ', displayName: 'Large Meeting Room', shortName: 'Large MR' },
-      { id: 'r12', pcoRoomId: 'Level 1 - Open Office Area', displayName: 'Open Office Area', shortName: 'Open O.' },
-      { id: 'r13', pcoRoomId: "Level 1 - Chris' Office", displayName: "Chris' Office", shortName: "Chris' O." },
-      { id: 'r14', pcoRoomId: 'Level 1 - Staff Kitchen', displayName: 'Staff Kitchen', shortName: 'Staff Kit.' },
+      { id: 'r12', pcoRoomId: 'Level 1 - Open Office Area', displayName: 'Open Office Area', shortName: 'Open Off.' },
+      { id: 'r13', pcoRoomId: "Level 1 - Chris' Office", displayName: "Chris' Office", shortName: "Chris'" },
+      { id: 'r14', pcoRoomId: 'Level 1 - Staff Kitchen', displayName: 'Staff Kitchen', shortName: 'St. Kit.' },
       { id: 'r15', pcoRoomId: 'Level 1 - REACH Office', displayName: 'REACH Office', shortName: 'REACH' },
       { id: 'r16', pcoRoomId: 'Covered rooftop carpark', displayName: 'Rooftop Carpark', shortName: 'Rooftop' },
     ]
@@ -94,6 +94,10 @@ const hexToRgba = (hex, alpha = 0.85) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+// Responsive room column width
+const ROOM_COL_MOBILE = 56;
+const ROOM_COL_DESKTOP = 192;
+
 const App = () => {
   const [currentDate, setCurrentDate] = useState(todayMelbString());
   const [viewStartHour, setViewStartHour] = useState(8);
@@ -110,8 +114,16 @@ const App = () => {
   const [activeDeptFilters, setActiveDeptFilters] = useState([]);
   const [activeTypeFilters, setActiveTypeFilters] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const visibleHoursCount = 12;
+  const roomColWidth = isMobile ? ROOM_COL_MOBILE : ROOM_COL_DESKTOP;
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const toggleGroup = (groupId) => {
     setCollapsedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -252,7 +264,6 @@ const App = () => {
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 shadow-sm shrink-0">
-        {/* Top row: logo + actions */}
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
             <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg"><Zap size={20} /></div>
@@ -265,7 +276,6 @@ const App = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* View toggle - hidden on mobile, grid view not useful on small screens */}
             <div className="hidden md:flex bg-slate-100 p-1 rounded-xl border border-slate-200">
               <button onClick={() => setActiveView('grid')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeView === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>
                 <LayoutGrid size={14} /> Grid
@@ -288,7 +298,6 @@ const App = () => {
           </div>
         </div>
 
-        {/* Bottom row: date navigation */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200 flex-1 max-w-xs mx-auto md:mx-0">
             <button onClick={() => setCurrentDate(shiftDateString(currentDate, -1))}
@@ -329,8 +338,8 @@ const App = () => {
 
       {/* Filter panel */}
       {showFilters && (
-        <div className="bg-white border-b border-slate-200 px-4 md:px-6 py-4 shrink-0 shadow-sm overflow-x-auto">
-          <div className="flex flex-col gap-4 min-w-0">
+        <div className="bg-white border-b border-slate-200 px-4 md:px-6 py-4 shrink-0 shadow-sm">
+          <div className="flex flex-col gap-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Department / Ministry</span>
@@ -382,7 +391,7 @@ const App = () => {
 
       <main className="flex-1 overflow-hidden flex flex-col relative">
         {error && (
-          <div className="bg-rose-50 border-b border-rose-100 p-3 flex flex-col items-center justify-center gap-2 text-rose-800 shrink-0">
+          <div className="bg-rose-50 border-b border-rose-100 p-3 flex flex-col items-center gap-2 text-rose-800 shrink-0">
             <div className="flex items-center gap-2 text-[10px] font-black uppercase"><AlertCircle size={14} /> Connection Error</div>
             <p className="text-[10px] font-bold text-center opacity-80 max-w-sm">
               {error.length > 150 ? `${error.substring(0, 150)}...` : error}
@@ -390,104 +399,130 @@ const App = () => {
           </div>
         )}
 
-        {/* Grid view — desktop only */}
         {activeView === 'grid' && (
-          <>
-            {/* Show grid on desktop */}
-            <div className="flex flex-1 overflow-hidden bg-slate-100/50 p-4 md:p-6">
-              <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col">
-                <div className="flex shrink-0 border-b border-slate-200">
-                  <div className="w-16 shrink-0 bg-slate-100/50 border-r border-slate-200 h-12 flex items-center justify-between px-2">
-                    <span className="uppercase tracking-widest text-[9px] font-black text-slate-400">Rooms</span>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => shiftTime(-1)} disabled={viewStartHour === 0} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowLeft size={12} /></button>
-                      <button onClick={() => shiftTime(1)} disabled={viewStartHour >= 24 - visibleHoursCount} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowRight size={12} /></button>
-                    </div>
-                  </div>
-                  <div className="flex flex-1 bg-white cursor-grab active:cursor-grabbing select-none" onMouseDown={handleTimeHeaderDrag}>
-                    {Array.from({ length: visibleHoursCount }, (_, i) => viewStartHour + i).map(hour => (
-                      <div key={hour} className="flex-1 border-r border-slate-100 h-12 flex items-center justify-center text-[10px] font-black text-slate-400 uppercase italic pointer-events-none">
-                        {hour % 12 || 12}{hour >= 12 ? 'PM' : 'AM'}
-                      </div>
-                    ))}
+          <div className="flex flex-1 overflow-hidden bg-slate-100/50 p-2 md:p-6">
+            <div className="bg-white rounded-2xl md:rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col">
+
+              {/* Fixed header */}
+              <div className="flex shrink-0 border-b border-slate-200">
+                <div
+                  className="shrink-0 bg-slate-100/50 border-r border-slate-200 h-12 flex items-center justify-between px-1 md:px-4"
+                  style={{ width: `${roomColWidth}px` }}
+                >
+                  <span className="uppercase tracking-widest text-[8px] md:text-[9px] font-black text-slate-400 hidden md:block">Rooms</span>
+                  <div className="flex items-center gap-0.5">
+                    <button onClick={() => shiftTime(-1)} disabled={viewStartHour === 0} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowLeft size={10} /></button>
+                    <button onClick={() => shiftTime(1)} disabled={viewStartHour >= 24 - visibleHoursCount} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowRight size={10} /></button>
                   </div>
                 </div>
-                <div className="flex overflow-y-auto scrollbar-hide" style={{ height: 'calc(100% - 3rem)' }}>
-                  <div className="w-16 shrink-0 border-r border-slate-200 bg-slate-50/50" style={{ minHeight: `${totalHeight}px` }}>
-                    {ROOM_GROUPS.map(group => (
-                      <div key={group.id}>
-                        <button
-                          onClick={() => toggleGroup(group.id)}
-                          className="w-full flex items-center justify-between px-4 text-white text-[9px] font-black uppercase tracking-widest"
-                          style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id] }}
+                <div
+                  className="flex flex-1 bg-white cursor-grab active:cursor-grabbing select-none"
+                  onMouseDown={handleTimeHeaderDrag}
+                >
+                  {Array.from({ length: visibleHoursCount }, (_, i) => viewStartHour + i).map(hour => (
+                    <div key={hour} className="flex-1 border-r border-slate-100 h-12 flex items-center justify-center text-[8px] md:text-[10px] font-black text-slate-400 uppercase italic pointer-events-none">
+                      {hour % 12 || 12}{hour >= 12 ? 'P' : 'A'}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Scrollable body */}
+              <div className="flex overflow-y-auto scrollbar-hide" style={{ height: 'calc(100% - 3rem)' }}>
+
+                {/* Left: room labels */}
+                <div
+                  className="shrink-0 border-r border-slate-200 bg-slate-50/50"
+                  style={{ width: `${roomColWidth}px`, minHeight: `${totalHeight}px` }}
+                >
+                  {ROOM_GROUPS.map(group => (
+                    <div key={group.id}>
+                      <button
+                        onClick={() => toggleGroup(group.id)}
+                        className="w-full flex items-center justify-between px-1 md:px-3 text-white font-black uppercase"
+                        style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id], fontSize: isMobile ? '7px' : '9px' }}
+                      >
+                        <span className="truncate">{isMobile ? group.label.split(' ')[1] || group.label : group.label}</span>
+                        {collapsedGroups[group.id] ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
+                      </button>
+                      {!collapsedGroups[group.id] && group.rooms.map(room => (
+                        <div
+                          key={room.id}
+                          className="border-b border-slate-100 px-1 md:px-3 flex items-center hover:bg-slate-100/50 transition-colors bg-white"
+                          style={{ height: `${rowHeight}px` }}
                         >
-                          <span>{group.label}</span>
-                          {collapsedGroups[group.id] ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-                        </button>
-                        {!collapsedGroups[group.id] && group.rooms.map(room => (
-                          <button
-  onClick={() => toggleGroup(group.id)}
-  className="w-full flex items-center justify-between px-1 text-white text-[8px] font-black uppercase tracking-tight"
-  style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id] }}
->
-  <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate hidden md:block">{room.displayName}</span>
-  <span className="font-black text-slate-800 text-[9px] uppercase tracking-tight truncate md:hidden leading-tight">{room.shortName}</span>
-</div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex-1 relative bg-white" style={{ minHeight: `${totalHeight}px` }}>
-                    {nowPos !== null && (
-                      <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 shadow-[0_0_15px_rgba(239,68,68,0.4)] pointer-events-none" style={{ left: `${nowPos}%` }}>
-                        <div className="w-2.5 h-2.5 bg-red-500 rounded-full transform -translate-x-[4px] mt-1 shadow-sm" />
-                      </div>
-                    )}
-                    {ROOM_GROUPS.map(group => (
-                      <div key={group.id}>
-                        <div className="w-full opacity-20" style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id] }} />
-                        {!collapsedGroups[group.id] && group.rooms.map(room => (
-                          <div key={room.id} className="flex border-b border-slate-100 relative group overflow-hidden" style={{ height: `${rowHeight}px` }}>
-                            {Array.from({ length: visibleHoursCount }).map((_, i) => (
-                              <div key={i} className="flex-1 border-r border-slate-50/50 group-hover:bg-slate-50/10 transition-colors"></div>
+                          <span className="font-black text-slate-800 uppercase tracking-tight truncate leading-tight hidden md:block text-[11px]">{room.displayName}</span>
+                          <span className="font-black text-slate-800 uppercase tracking-tight truncate leading-tight md:hidden text-[8px]">{room.shortName}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Right: event grid */}
+                <div className="flex-1 relative bg-white" style={{ minHeight: `${totalHeight}px` }}>
+                  {nowPos !== null && (
+                    <div
+                      className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 shadow-[0_0_15px_rgba(239,68,68,0.4)] pointer-events-none"
+                      style={{ left: `${nowPos}%` }}
+                    >
+                      <div className="w-2.5 h-2.5 bg-red-500 rounded-full transform -translate-x-[4px] mt-1 shadow-sm" />
+                    </div>
+                  )}
+
+                  {ROOM_GROUPS.map(group => (
+                    <div key={group.id}>
+                      <div
+                        className="w-full opacity-20"
+                        style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id] }}
+                      />
+                      {!collapsedGroups[group.id] && group.rooms.map(room => (
+                        <div
+                          key={room.id}
+                          className="flex border-b border-slate-100 relative group overflow-hidden"
+                          style={{ height: `${rowHeight}px` }}
+                        >
+                          {Array.from({ length: visibleHoursCount }).map((_, i) => (
+                            <div key={i} className="flex-1 border-r border-slate-50/50 group-hover:bg-slate-50/10 transition-colors"></div>
+                          ))}
+                          {filteredBookings
+                            .filter(b => {
+                              if (!b.roomNames.includes(room.pcoRoomId) || room.pcoRoomId === "") return false;
+                              return getMelbDate(b.start) === currentDate;
+                            })
+                            .map(b => (
+                              <div
+                                key={b.id}
+                                style={{
+                                  ...getEventStyle(b),
+                                  backgroundColor: darkenHex(b.eventColor, 0.3),
+                                  borderLeftColor: darkenHex(b.eventColor, 0.5)
+                                }}
+                                className="absolute top-1 h-14 rounded-lg md:rounded-xl p-1 md:p-2 shadow-lg border-l-4 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center overflow-hidden"
+                              >
+                                <p className="text-[8px] md:text-[9px] font-black truncate uppercase leading-tight drop-shadow-sm">{b.title}</p>
+                                <p className="text-[7px] font-bold opacity-90 uppercase mt-0.5 flex items-center gap-0.5">
+                                  <Clock size={7} className="shrink-0" />
+                                  {new Date(b.start).toLocaleTimeString('en-AU', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })}
+                                </p>
+                                {!isMobile && b.departmentTags.length > 0 && (
+                                  <p className="text-[7px] font-black opacity-90 uppercase mt-0.5 truncate">{b.departmentTags.map(t => t.name).join(', ')}</p>
+                                )}
+                              </div>
                             ))}
-                            {filteredBookings
-                              .filter(b => {
-                                if (!b.roomNames.includes(room.pcoRoomId) || room.pcoRoomId === "") return false;
-                                return getMelbDate(b.start) === currentDate;
-                              })
-                              .map(b => (
-                                <div
-                                  key={b.id}
-                                  style={{ ...getEventStyle(b), backgroundColor: darkenHex(b.eventColor, 0.3), borderLeftColor: darkenHex(b.eventColor, 0.5) }}
-                                  className="absolute top-1 h-14 rounded-xl p-2 shadow-lg border-l-4 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center overflow-hidden"
-                                >
-                                  <p className="text-[9px] font-black truncate uppercase leading-tight drop-shadow-sm">{b.title}</p>
-                                  <p className="text-[7px] font-bold opacity-90 uppercase mt-0.5 flex items-center gap-1">
-                                    <Clock size={8} className="shrink-0" />
-                                    {new Date(b.start).toLocaleTimeString('en-AU', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })}
-                                  </p>
-                                  {b.departmentTags.length > 0 && (
-                                    <p className="text-[7px] font-black opacity-90 uppercase mt-0.5 truncate">{b.departmentTags.map(t => t.name).join(', ')}</p>
-                                  )}
-                                </div>
-                              ))}
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
-
-          </>
+          </div>
         )}
 
-        {/* Feed view */}
         {activeView === 'feed' && (
           <div className="flex-1 overflow-auto bg-slate-100/50">
-            <div className="max-w-2xl mx-auto px-3 md:px-6 py-4 md:py-6 space-y-3 pb-24">
+            <div className="max-w-2xl mx-auto px-3 md:px-6 py-4 space-y-3 pb-24">
               {filteredBookings.length > 0 ? filteredBookings
                 .filter(b => getMelbDate(b.start) === currentDate)
                 .sort((a, b) => new Date(a.start) - new Date(b.start))
@@ -495,12 +530,10 @@ const App = () => {
                   <div key={b.id} className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm overflow-hidden relative">
                     <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ backgroundColor: darkenHex(b.eventColor, 0.3) }} />
                     <div className="pl-5 pr-4 py-4 flex items-start gap-3">
-                      {/* Date badge */}
                       <div className="w-12 h-12 bg-slate-50 rounded-xl flex flex-col items-center justify-center border border-slate-100 shrink-0">
                         <span className="text-[8px] font-black uppercase text-slate-400 leading-none">{new Date(b.start).toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short' })}</span>
                         <span className="text-base font-black text-slate-800 leading-none mt-0.5">{new Date(b.start).toLocaleDateString('en-AU', { timeZone: TZ, day: 'numeric' })}</span>
                       </div>
-                      {/* Event info */}
                       <div className="min-w-0 flex-1">
                         <h3 className="font-black text-slate-800 text-sm uppercase tracking-tight leading-tight">{b.title}</h3>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
