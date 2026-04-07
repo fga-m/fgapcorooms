@@ -235,24 +235,41 @@ const App = () => {
     return acc;
   }, 0);
 
-  const handleTimeHeaderDrag = (e) => {
-    const startX = e.clientX;
-    const startHour = viewStartHour;
-    const headerWidth = e.currentTarget.getBoundingClientRect().width;
-    const hoursPerPixel = visibleHoursCount / headerWidth;
-    const onMove = (moveEvent) => {
-      const dx = moveEvent.clientX - startX;
-      const hourDelta = -(dx * hoursPerPixel);
-      const newHour = Math.round(startHour + hourDelta);
-      setViewStartHour(Math.max(0, Math.min(24 - visibleHoursCount, newHour)));
-    };
-    const onUp = () => {
+const handleTimeHeaderDrag = (e) => {
+  const isTouch = e.type === 'touchstart';
+  const getX = (event) => isTouch ? event.touches[0].clientX : event.clientX;
+
+  const startX = getX(e);
+  const startHour = viewStartHour;
+  const headerWidth = e.currentTarget.getBoundingClientRect().width;
+  const hoursPerPixel = visibleHoursCount / headerWidth;
+
+  const onMove = (moveEvent) => {
+    const x = isTouch ? moveEvent.touches[0].clientX : moveEvent.clientX;
+    const dx = x - startX;
+    const hourDelta = -(dx * hoursPerPixel);
+    const newHour = Math.round(startHour + hourDelta);
+    setViewStartHour(Math.max(0, Math.min(24 - visibleHoursCount, newHour)));
+  };
+
+  const onUp = () => {
+    if (isTouch) {
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    } else {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
-    };
+    }
+  };
+
+  if (isTouch) {
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('touchend', onUp);
+  } else {
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  };
+  }
+};
 
   const displayDate = new Date(currentDate + 'T12:00:00Z').toLocaleDateString('en-AU', {
     weekday: 'short', day: 'numeric', month: 'short'
@@ -418,6 +435,7 @@ const App = () => {
                 <div
                   className="flex flex-1 bg-white cursor-grab active:cursor-grabbing select-none"
                   onMouseDown={handleTimeHeaderDrag}
+                  onTouchStart={handleTimeHeaderDrag}
                 >
                   {Array.from({ length: visibleHoursCount }, (_, i) => viewStartHour + i).map(hour => (
                     <div key={hour} className="flex-1 border-r border-slate-100 h-12 flex items-center justify-center text-[8px] md:text-[10px] font-black text-slate-400 uppercase italic pointer-events-none">
