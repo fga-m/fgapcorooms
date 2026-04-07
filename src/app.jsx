@@ -397,7 +397,7 @@ const App = () => {
             <div className="flex flex-1 overflow-hidden bg-slate-100/50 p-4 md:p-6">
               <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col">
                 <div className="flex shrink-0 border-b border-slate-200">
-                  <div className="w-24 shrink-0 bg-slate-100/50 border-r border-slate-200 h-12 flex items-center justify-between px-2">
+                  <div className="w-16 shrink-0 bg-slate-100/50 border-r border-slate-200 h-12 flex items-center justify-between px-2">
                     <span className="uppercase tracking-widest text-[9px] font-black text-slate-400">Rooms</span>
                     <div className="flex items-center gap-1">
                       <button onClick={() => shiftTime(-1)} disabled={viewStartHour === 0} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowLeft size={12} /></button>
@@ -413,7 +413,7 @@ const App = () => {
                   </div>
                 </div>
                 <div className="flex overflow-y-auto scrollbar-hide" style={{ height: 'calc(100% - 3rem)' }}>
-                  <div className="w-24 shrink-0 border-r border-slate-200 bg-slate-50/50" style={{ minHeight: `${totalHeight}px` }}>
+                  <div className="w-16 shrink-0 border-r border-slate-200 bg-slate-50/50" style={{ minHeight: `${totalHeight}px` }}>
                     {ROOM_GROUPS.map(group => (
                       <div key={group.id}>
                         <button
@@ -427,11 +427,11 @@ const App = () => {
                         {!collapsedGroups[group.id] && group.rooms.map(room => (
                           <button
   onClick={() => toggleGroup(group.id)}
-  className="w-full flex items-center justify-between px-2 text-white text-[9px] font-black uppercase tracking-widest"
+  className="w-full flex items-center justify-between px-1 text-white text-[8px] font-black uppercase tracking-tight"
   style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id] }}
 >
   <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate hidden md:block">{room.displayName}</span>
-  <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate md:hidden">{room.shortName}</span>
+  <span className="font-black text-slate-800 text-[9px] uppercase tracking-tight truncate md:hidden leading-tight">{room.shortName}</span>
 </div>
                         ))}
                       </div>
