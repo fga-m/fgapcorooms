@@ -402,3 +402,227 @@ const App = () => {
                     <div className="flex items-center gap-1">
                       <button onClick={() => shiftTime(-1)} disabled={viewStartHour === 0} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowLeft size={12} /></button>
                       <button onClick={() => shiftTime(1)} disabled={viewStartHour >= 24 - visibleHoursCount} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowRight size={12} /></button>
+                    </div>
+                  </div>
+                  <div className="flex flex-1 bg-white cursor-grab active:cursor-grabbing select-none" onMouseDown={handleTimeHeaderDrag}>
+                    {Array.from({ length: visibleHoursCount }, (_, i) => viewStartHour + i).map(hour => (
+                      <div key={hour} className="flex-1 border-r border-slate-100 h-12 flex items-center justify-center text-[10px] font-black text-slate-400 uppercase italic pointer-events-none">
+                        {hour % 12 || 12}{hour >= 12 ? 'PM' : 'AM'}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex overflow-y-auto scrollbar-hide" style={{ height: 'calc(100% - 3rem)' }}>
+                  <div className="w-48 shrink-0 border-r border-slate-200 bg-slate-50/50" style={{ minHeight: `${totalHeight}px` }}>
+                    {ROOM_GROUPS.map(group => (
+                      <div key={group.id}>
+                        <button
+                          onClick={() => toggleGroup(group.id)}
+                          className="w-full flex items-center justify-between px-4 text-white text-[9px] font-black uppercase tracking-widest"
+                          style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id] }}
+                        >
+                          <span>{group.label}</span>
+                          {collapsedGroups[group.id] ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+                        </button>
+                        {!collapsedGroups[group.id] && group.rooms.map(room => (
+                          <div key={room.id} className="border-b border-slate-100 px-4 flex items-center hover:bg-slate-100/50 transition-colors bg-white" style={{ height: `${rowHeight}px` }}>
+                            <span className="font-black text-slate-800 text-[11px] uppercase tracking-tight truncate">{room.displayName}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex-1 relative bg-white" style={{ minHeight: `${totalHeight}px` }}>
+                    {nowPos !== null && (
+                      <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 shadow-[0_0_15px_rgba(239,68,68,0.4)] pointer-events-none" style={{ left: `${nowPos}%` }}>
+                        <div className="w-2.5 h-2.5 bg-red-500 rounded-full transform -translate-x-[4px] mt-1 shadow-sm" />
+                      </div>
+                    )}
+                    {ROOM_GROUPS.map(group => (
+                      <div key={group.id}>
+                        <div className="w-full opacity-20" style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id] }} />
+                        {!collapsedGroups[group.id] && group.rooms.map(room => (
+                          <div key={room.id} className="flex border-b border-slate-100 relative group overflow-hidden" style={{ height: `${rowHeight}px` }}>
+                            {Array.from({ length: visibleHoursCount }).map((_, i) => (
+                              <div key={i} className="flex-1 border-r border-slate-50/50 group-hover:bg-slate-50/10 transition-colors"></div>
+                            ))}
+                            {filteredBookings
+                              .filter(b => {
+                                if (!b.roomNames.includes(room.pcoRoomId) || room.pcoRoomId === "") return false;
+                                return getMelbDate(b.start) === currentDate;
+                              })
+                              .map(b => (
+                                <div
+                                  key={b.id}
+                                  style={{ ...getEventStyle(b), backgroundColor: darkenHex(b.eventColor, 0.3), borderLeftColor: darkenHex(b.eventColor, 0.5) }}
+                                  className="absolute top-1 h-14 rounded-xl p-2 shadow-lg border-l-4 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center overflow-hidden"
+                                >
+                                  <p className="text-[9px] font-black truncate uppercase leading-tight drop-shadow-sm">{b.title}</p>
+                                  <p className="text-[7px] font-bold opacity-90 uppercase mt-0.5 flex items-center gap-1">
+                                    <Clock size={8} className="shrink-0" />
+                                    {new Date(b.start).toLocaleTimeString('en-AU', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })}
+                                  </p>
+                                  {b.departmentTags.length > 0 && (
+                                    <p className="text-[7px] font-black opacity-90 uppercase mt-0.5 truncate">{b.departmentTags.map(t => t.name).join(', ')}</p>
+                                  )}
+                                </div>
+                              ))}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* On mobile, show a message instead of the grid */}
+            <div className="flex md:hidden flex-1 items-center justify-center p-6">
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 text-center max-w-xs">
+                <LayoutGrid className="mx-auto text-slate-300 mb-4" size={40} />
+                <p className="font-black text-slate-700 uppercase text-sm tracking-tight">Grid view is best on desktop</p>
+                <p className="text-[11px] text-slate-400 font-medium mt-2 leading-relaxed">Switch to Feed view for a mobile-friendly event list.</p>
+                <button
+                  onClick={() => setActiveView('feed')}
+                  className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest"
+                >
+                  Switch to Feed
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Feed view */}
+        {activeView === 'feed' && (
+          <div className="flex-1 overflow-auto bg-slate-100/50">
+            <div className="max-w-2xl mx-auto px-3 md:px-6 py-4 md:py-6 space-y-3 pb-24">
+              {filteredBookings.length > 0 ? filteredBookings
+                .filter(b => getMelbDate(b.start) === currentDate)
+                .sort((a, b) => new Date(a.start) - new Date(b.start))
+                .map(b => (
+                  <div key={b.id} className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm overflow-hidden relative">
+                    <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ backgroundColor: darkenHex(b.eventColor, 0.3) }} />
+                    <div className="pl-5 pr-4 py-4 flex items-start gap-3">
+                      {/* Date badge */}
+                      <div className="w-12 h-12 bg-slate-50 rounded-xl flex flex-col items-center justify-center border border-slate-100 shrink-0">
+                        <span className="text-[8px] font-black uppercase text-slate-400 leading-none">{new Date(b.start).toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short' })}</span>
+                        <span className="text-base font-black text-slate-800 leading-none mt-0.5">{new Date(b.start).toLocaleDateString('en-AU', { timeZone: TZ, day: 'numeric' })}</span>
+                      </div>
+                      {/* Event info */}
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-black text-slate-800 text-sm uppercase tracking-tight leading-tight">{b.title}</h3>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                          <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                            <Clock size={10} className="text-indigo-400 shrink-0" />
+                            {new Date(b.start).toLocaleTimeString('en-AU', { timeZone: TZ, hour: '2-digit', minute: '2-digit' })}
+                            {' – '}
+                            {new Date(b.end).toLocaleTimeString('en-AU', { timeZone: TZ, hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {b.roomNames.length > 0 && (
+                            <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                              <Users size={10} className="text-indigo-400 shrink-0" />
+                              {b.roomNames.join(', ')}
+                            </span>
+                          )}
+                        </div>
+                        {(b.departmentTags.length > 0 || b.eventTypeTags.length > 0) && (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {b.departmentTags.map(tag => (
+                              <span
+                                key={tag.id}
+                                className="text-[8px] font-black px-2 py-0.5 rounded-full uppercase"
+                                style={{ backgroundColor: hexToRgba(tag.color, 0.15), color: darkenHex(tag.color, 0.4) }}
+                              >
+                                {tag.name}
+                              </span>
+                            ))}
+                            {b.eventTypeTags.map(tag => (
+                              <span
+                                key={tag.id}
+                                className="text-[8px] font-black px-2 py-0.5 rounded-full uppercase border"
+                                style={{ borderColor: hexToRgba(tag.color, 0.5), color: darkenHex(tag.color, 0.4) }}
+                              >
+                                {tag.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )) : (
+                <div className="text-center py-20 opacity-40 flex flex-col items-center gap-4">
+                  <RefreshCw className="animate-spin text-slate-300" size={40} />
+                  <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">No Events Found.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Mobile bottom nav */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 flex items-center justify-around z-40 shadow-lg">
+        <button
+          onClick={() => setActiveView('feed')}
+          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${activeView === 'feed' ? 'text-indigo-600' : 'text-slate-400'}`}
+        >
+          <ListFilter size={20} />
+          <span className="text-[9px] font-black uppercase tracking-widest">Feed</span>
+        </button>
+        <button
+          onClick={() => setActiveView('grid')}
+          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${activeView === 'grid' ? 'text-indigo-600' : 'text-slate-400'}`}
+        >
+          <LayoutGrid size={20} />
+          <span className="text-[9px] font-black uppercase tracking-widest">Grid</span>
+        </button>
+        <button
+          onClick={() => setShowFilters(prev => !prev)}
+          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all relative ${showFilters || totalActiveFilters > 0 ? 'text-indigo-600' : 'text-slate-400'}`}
+        >
+          <ListFilter size={20} />
+          {totalActiveFilters > 0 && (
+            <span className="absolute top-1 right-2 bg-indigo-600 text-white text-[7px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center">{totalActiveFilters}</span>
+          )}
+          <span className="text-[9px] font-black uppercase tracking-widest">Filter</span>
+        </button>
+        <button
+          onClick={fetchData}
+          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all text-slate-400 ${isLoading ? 'animate-spin text-indigo-500' : ''}`}
+        >
+          <RefreshCw size={20} />
+          <span className="text-[9px] font-black uppercase tracking-widest">Refresh</span>
+        </button>
+      </div>
+
+      {showDebug && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-amber-400 z-[100] h-96 overflow-hidden shadow-2xl flex flex-col p-6 md:p-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-black text-amber-900 uppercase text-xs flex items-center gap-2"><Bug size={16} className="text-amber-500" /> Room Discovery</h2>
+            <button onClick={() => setShowDebug(false)} className="text-amber-500 font-black hover:text-amber-700 text-xs uppercase">Close</button>
+          </div>
+          <div className="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pb-8">
+            {apiRooms.length > 0 ? apiRooms.map(res => (
+              <div key={res.id} className="p-3 rounded-2xl border-2 border-slate-100 bg-white flex items-center justify-between hover:border-amber-100 transition-all">
+                <div className="overflow-hidden pr-3">
+                  <p className="font-black text-[11px] text-slate-800 truncate uppercase tracking-tight">{res.name || 'Unnamed'}</p>
+                  <code className="text-[10px] font-mono text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded mt-1 inline-block">{res.id}</code>
+                </div>
+                <button onClick={() => { navigator.clipboard.writeText(res.name || res.id); alert(`Copied!`); }} className="p-2 bg-slate-50 rounded-xl text-slate-400 hover:text-indigo-600"><CheckCircle2 size={16} /></button>
+              </div>
+            )) : (
+              <div className="col-span-full py-12 flex flex-col items-center gap-3">
+                <ShieldAlert className="text-amber-400" size={28} />
+                <p className="text-[10px] font-black uppercase text-amber-900">No room data available</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default App;
