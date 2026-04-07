@@ -394,7 +394,7 @@ const App = () => {
         {activeView === 'grid' && (
           <>
             {/* Show grid on desktop */}
-            <div className="hidden md:flex flex-1 overflow-hidden bg-slate-100/50 p-6">
+            <div className="flex flex-1 overflow-hidden bg-slate-100/50 p-4 md:p-6">
               <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col">
                 <div className="flex shrink-0 border-b border-slate-200">
                   <div className="w-48 shrink-0 bg-slate-100/50 border-r border-slate-200 h-12 flex items-center justify-between px-4">
@@ -477,20 +477,6 @@ const App = () => {
               </div>
             </div>
 
-            {/* On mobile, show a message instead of the grid */}
-            <div className="flex md:hidden flex-1 items-center justify-center p-6">
-              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 text-center max-w-xs">
-                <LayoutGrid className="mx-auto text-slate-300 mb-4" size={40} />
-                <p className="font-black text-slate-700 uppercase text-sm tracking-tight">Grid view is best on desktop</p>
-                <p className="text-[11px] text-slate-400 font-medium mt-2 leading-relaxed">Switch to Feed view for a mobile-friendly event list.</p>
-                <button
-                  onClick={() => setActiveView('feed')}
-                  className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest"
-                >
-                  Switch to Feed
-                </button>
-              </div>
-            </div>
           </>
         )}
 
