@@ -609,7 +609,7 @@ const App = () => {
                 >
                   {Array.from({ length: visibleHoursCount }, (_, i) => viewStartHour + i).map(hour => (
                     <div key={hour} className="flex-1 border-r border-slate-100 h-12 flex items-center justify-center text-[10px] md:text-[11px] font-black text-slate-500 uppercase italic pointer-events-none">
-                      {hour % 12 || 12}{hour >= 12 ? 'P' : 'A'}
+                      {hour % 12 || 12}{hour >= 12 ? 'PM' : 'AM'}
                     </div>
                   ))}
                 </div>
