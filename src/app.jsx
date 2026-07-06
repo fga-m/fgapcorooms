@@ -59,6 +59,7 @@ const TZ = 'Australia/Melbourne';
 const PCO_NAME_TO_DISPLAY = {};
 ROOM_GROUPS.forEach(g => g.rooms.forEach(r => { PCO_NAME_TO_DISPLAY[r.pcoRoomId.trim()] = r.displayName; }));
 const displayRoomName = (pcoName) => PCO_NAME_TO_DISPLAY[(pcoName || '').trim()] || pcoName;
+const KNOWN_ROOM_KEYS = new Set(Object.keys(PCO_NAME_TO_DISPLAY));
 
 const getMelbHour = (date) => {
   const parts = new Intl.DateTimeFormat('en-AU', {
@@ -308,8 +309,11 @@ const App = () => {
   }, [bookings, activeDeptFilters, activeTypeFilters]);
 
   // Bookings that actually occur (fully or partly) on the selected day
+  // and occupy at least one tracked room (physical or Zoom)
   const dayBookings = useMemo(
-    () => filteredBookings.filter(b => occursOnDay(b, currentDate)),
+    () => filteredBookings.filter(b =>
+      occursOnDay(b, currentDate) && b.roomNames.some(n => KNOWN_ROOM_KEYS.has(n))
+    ),
     [filteredBookings, currentDate]
   );
 
