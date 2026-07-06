@@ -1,6 +1,35 @@
 /**
  * api/calendar.mjs
  */
+
+const PCO_BASE = 'https://api.planningcenteronline.com/calendar/v2';
+
+/**
+ * Fetch every page of a PCO collection by following links.next.
+ * Returns { ok, data, included } or { ok: false, status, errorText }.
+ */
+async function fetchAllPages(url, headers, maxPages = 10) {
+  let data = [];
+  let included = [];
+  let next = url;
+  let pages = 0;
+
+  while (next && pages < maxPages) {
+    const r = await fetch(next, { headers });
+    if (!r.ok) {
+      const text = await r.text();
+      return { ok: false, status: r.status, errorText: text.slice(0, 500) };
+    }
+    const json = await r.json();
+    data = data.concat(json.data || []);
+    included = included.concat(json.included || []);
+    next = json.links?.next || null;
+    pages++;
+  }
+
+  return { ok: true, data, included };
+}
+
 export default async function handler(req, res) {
   const { date } = req.query;
 
@@ -27,7 +56,6 @@ export default async function handler(req, res) {
     };
 
     // Fetch a window that covers the full Melbourne day regardless of DST
-    const startStr = date + 'T00:00:00Z';
     const nextDay = new Date(date + 'T00:00:00Z');
     nextDay.setUTCDate(nextDay.getUTCDate() + 1);
     const endStr = nextDay.toISOString().split('T')[0] + 'T12:59:59Z';
@@ -36,39 +64,43 @@ export default async function handler(req, res) {
     prevDay.setUTCDate(prevDay.getUTCDate() - 1);
     const startStrWide = prevDay.toISOString().split('T')[0] + 'T13:00:00Z';
 
-    const pcoUrl = `https://api.planningcenteronline.com/calendar/v2/event_instances?include=event,resource_bookings,tags&where[starts_at][gte]=${startStrWide}&where[starts_at][lte]=${endStr}&per_page=100`;
+    const include = 'include=event,resource_bookings,tags';
 
-    const [eventRes, roomsRes, tagsRes] = await Promise.all([
-      fetch(pcoUrl, { headers }),
-      fetch('https://api.planningcenteronline.com/calendar/v2/rooms?per_page=100', { headers }),
-      fetch('https://api.planningcenteronline.com/calendar/v2/tags?include=tag_group&per_page=100', { headers })
+    // Overlap query: catches multi-day events that started before the window
+    const overlapUrl = `${PCO_BASE}/event_instances?${include}&where[starts_at][lte]=${endStr}&where[ends_at][gte]=${startStrWide}&order=starts_at&per_page=100`;
+    // Fallback (original behaviour) in case ends_at filtering is rejected
+    const fallbackUrl = `${PCO_BASE}/event_instances?${include}&where[starts_at][gte]=${startStrWide}&where[starts_at][lte]=${endStr}&per_page=100`;
+
+    let [eventResult, roomsResult, tagsResult] = await Promise.all([
+      fetchAllPages(overlapUrl, headers),
+      fetchAllPages(`${PCO_BASE}/rooms?per_page=100`, headers),
+      fetchAllPages(`${PCO_BASE}/tags?include=tag_group&per_page=100`, headers)
     ]);
 
-    if (!eventRes.ok) {
-      const errorText = await eventRes.text();
-      return res.status(eventRes.status).json({
-        error: `PCO Event Error (${eventRes.status})`,
-        details: errorText.slice(0, 500)
+    if (!eventResult.ok) {
+      eventResult = await fetchAllPages(fallbackUrl, headers);
+    }
+
+    if (!eventResult.ok) {
+      return res.status(eventResult.status).json({
+        error: `PCO Event Error (${eventResult.status})`,
+        details: eventResult.errorText
       });
     }
 
-    const data = await eventRes.json();
-
     // Build resource ID -> room name lookup
     let resourceMap = {};
-    if (roomsRes.ok) {
-      const roomsData = await roomsRes.json();
-      for (const room of (roomsData.data || [])) {
+    if (roomsResult.ok) {
+      for (const room of roomsResult.data) {
         resourceMap[room.id] = room.attributes.name;
       }
     }
 
     if (Object.keys(resourceMap).length === 0) {
       try {
-        const resourcesRes = await fetch('https://api.planningcenteronline.com/calendar/v2/resources?per_page=100', { headers });
-        if (resourcesRes.ok) {
-          const resourcesData = await resourcesRes.json();
-          for (const resource of (resourcesData.data || [])) {
+        const resourcesResult = await fetchAllPages(`${PCO_BASE}/resources?per_page=100`, headers);
+        if (resourcesResult.ok) {
+          for (const resource of resourcesResult.data) {
             resourceMap[resource.id] = resource.attributes.name;
           }
         }
@@ -78,16 +110,13 @@ export default async function handler(req, res) {
     // Build tag ID -> tag info lookup (name, color, group)
     let tagMap = {};
     let tagGroups = {};
-    if (tagsRes.ok) {
-      const tagsData = await tagsRes.json();
-      // Map tag groups
-      for (const group of (tagsData.included || [])) {
+    if (tagsResult.ok) {
+      for (const group of tagsResult.included) {
         if (group.type === 'TagGroup') {
           tagGroups[group.id] = group.attributes.name;
         }
       }
-      // Map tags
-      for (const tag of (tagsData.data || [])) {
+      for (const tag of tagsResult.data) {
         tagMap[tag.id] = {
           id: tag.id,
           name: tag.attributes.name,
@@ -98,12 +127,14 @@ export default async function handler(req, res) {
       }
     }
 
+    const included = eventResult.included;
+
     // Enrich each instance with resolved room names and tags
-    const instances = (data.data || []).map(instance => {
+    const instances = eventResult.data.map(instance => {
       const bookingRefs = instance.relationships?.resource_bookings?.data || [];
       const roomNames = bookingRefs
         .map(ref => {
-          const booking = (data.included || []).find(
+          const booking = included.find(
             inc => inc.type === 'ResourceBooking' && inc.id === ref.id
           );
           if (!booking) return null;
@@ -136,12 +167,14 @@ export default async function handler(req, res) {
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
+    // Let Vercel's edge absorb repeat requests (congregation + kiosk polling)
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     return res.status(200).json({
       rooms: Object.entries(resourceMap).map(([id, name]) => ({ id, name })),
       tags: Object.values(tagMap),
       tagGroups: Object.entries(tagGroups).map(([id, name]) => ({ id, name })),
       instances,
-      included: data.included || [],
+      included,
       range: { start: startStrWide, end: endStr }
     });
 

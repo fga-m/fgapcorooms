@@ -1,9 +1,9 @@
 /* eslint-disable */
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ChevronLeft, ChevronRight, Clock, Users, AlertCircle, Bug, RefreshCw,
   Zap, RotateCcw, CheckCircle2, ArrowLeft, ArrowRight, ShieldAlert,
-  ListFilter, LayoutGrid, FileCode, ChevronDown, ChevronUp, X
+  ListFilter, LayoutGrid, ChevronDown, ChevronUp, X, List, CalendarDays, Copy
 } from 'lucide-react';
 
 const ROOM_GROUPS = [
@@ -55,6 +55,11 @@ const GROUP_COLORS = {
 
 const TZ = 'Australia/Melbourne';
 
+// PCO room name (trimmed) -> friendly display name
+const PCO_NAME_TO_DISPLAY = {};
+ROOM_GROUPS.forEach(g => g.rooms.forEach(r => { PCO_NAME_TO_DISPLAY[r.pcoRoomId.trim()] = r.displayName; }));
+const displayRoomName = (pcoName) => PCO_NAME_TO_DISPLAY[(pcoName || '').trim()] || pcoName;
+
 const getMelbHour = (date) => {
   const parts = new Intl.DateTimeFormat('en-AU', {
     timeZone: TZ, hour: 'numeric', minute: 'numeric', hour12: false
@@ -78,6 +83,31 @@ const shiftDateString = (dateStr, days) => {
   return date.toISOString().split('T')[0];
 };
 
+// Hour-of-day of `iso` relative to a given Melbourne day.
+// Clamps to 0/24 when the timestamp falls on an earlier/later day,
+// so events spanning midnight render correctly on every day they touch.
+const getHourForDay = (iso, day) => {
+  const d = getMelbDate(iso);
+  if (d < day) return 0;
+  if (d > day) return 24;
+  return getMelbHour(iso);
+};
+
+const occursOnDay = (b, day) => getHourForDay(b.start, day) < getHourForDay(b.end, day);
+
+// Assign overlapping events in a room to stacked lanes
+const assignLanes = (events) => {
+  const sorted = [...events].sort((a, b) => new Date(a.start) - new Date(b.start));
+  const laneEnds = [];
+  const out = sorted.map(ev => {
+    let lane = laneEnds.findIndex(end => new Date(ev.start).getTime() >= end);
+    if (lane === -1) lane = laneEnds.length;
+    laneEnds[lane] = new Date(ev.end).getTime();
+    return { ...ev, lane };
+  });
+  return { events: out, laneCount: Math.max(1, laneEnds.length) };
+};
+
 const darkenHex = (hex, amount = 0.4) => {
   if (!hex || !hex.startsWith('#')) return hex;
   const r = Math.floor(parseInt(hex.slice(1, 3), 16) * (1 - amount));
@@ -94,9 +124,14 @@ const hexToRgba = (hex, alpha = 0.85) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+const fmtTime = (iso) => new Date(iso).toLocaleTimeString('en-AU', { timeZone: TZ, hour: 'numeric', minute: '2-digit' });
+const fmtDay = (iso) => new Date(iso).toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short', day: 'numeric', month: 'short' });
+
 // Responsive room column width
-const ROOM_COL_MOBILE = 56;
+const ROOM_COL_MOBILE = 64;
 const ROOM_COL_DESKTOP = 192;
+
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
 const App = () => {
   const [currentDate, setCurrentDate] = useState(todayMelbString());
@@ -114,9 +149,12 @@ const App = () => {
   const [activeDeptFilters, setActiveDeptFilters] = useState([]);
   const [activeTypeFilters, setActiveTypeFilters] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [hideEmptyRooms, setHideEmptyRooms] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-  const visibleHoursCount = 12;
+  const visibleHoursCount = isMobile ? 8 : 12;
   const roomColWidth = isMobile ? ROOM_COL_MOBILE : ROOM_COL_DESKTOP;
 
   useEffect(() => {
@@ -124,6 +162,11 @@ const App = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Keep the visible window valid when hour count changes (mobile <-> desktop)
+  useEffect(() => {
+    setViewStartHour(prev => Math.max(0, Math.min(prev, 24 - visibleHoursCount)));
+  }, [visibleHoursCount]);
 
   const toggleGroup = (groupId) => {
     setCollapsedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -148,7 +191,6 @@ const App = () => {
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
-    setError(null);
     try {
       const response = await fetch(`/api/calendar?date=${currentDate}`);
       const result = await response.json();
@@ -163,7 +205,7 @@ const App = () => {
           title: eventData?.attributes?.name || instance.attributes?.name || "Untitled Event",
           start: instance.attributes?.starts_at,
           end: instance.attributes?.ends_at,
-          roomNames: instance.resolvedRooms || [],
+          roomNames: (instance.resolvedRooms || []).map(n => (n || '').trim()),
           tags: instance.resolvedTags || [],
           departmentTags: instance.departmentTags || [],
           eventTypeTags: instance.eventTypeTags || [],
@@ -172,6 +214,7 @@ const App = () => {
       });
       setBookings(mappedBookings);
       setLastUpdated(new Date());
+      setError(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -180,6 +223,46 @@ const App = () => {
   }, [currentDate]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Auto-refresh: poll while visible, refetch on wake (kiosk & mobile)
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!document.hidden) fetchData();
+    }, AUTO_REFRESH_MS);
+    const onVisible = () => { if (!document.hidden) fetchData(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [fetchData]);
+
+  // Roll over to the new day at midnight when viewing "today"
+  const viewingTodayRef = useRef(true);
+  useEffect(() => {
+    viewingTodayRef.current = currentDate === todayMelbString();
+  }, [currentDate]);
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (viewingTodayRef.current) {
+        const t = todayMelbString();
+        setCurrentDate(prev => (prev === t ? prev : t));
+      }
+    }, 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Escape closes modal / date picker
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setSelectedEvent(null);
+        setShowDatePicker(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const shiftTime = (amount) => {
     setViewStartHour(prev => Math.max(0, Math.min(24 - visibleHoursCount, prev + amount)));
@@ -192,8 +275,8 @@ const App = () => {
   };
 
   const getEventStyle = (event) => {
-    const startHour = getMelbHour(event.start);
-    const endHour = getMelbHour(event.end);
+    const startHour = getHourForDay(event.start, currentDate);
+    const endHour = getHourForDay(event.end, currentDate);
     const effectiveStart = Math.max(startHour, viewStartHour);
     const effectiveEnd = Math.min(endHour, viewStartHour + visibleHoursCount);
     if (effectiveEnd <= effectiveStart) return { display: 'none' };
@@ -208,7 +291,7 @@ const App = () => {
     const hour = getMelbHour(now);
     if (hour < viewStartHour || hour > viewStartHour + visibleHoursCount) return null;
     return ((hour - viewStartHour) / visibleHoursCount) * 100;
-  }, [currentDate, viewStartHour]);
+  }, [currentDate, viewStartHour, visibleHoursCount, lastUpdated]);
 
   const filteredBookings = useMemo(() => {
     return bookings.filter(b => {
@@ -224,6 +307,34 @@ const App = () => {
     });
   }, [bookings, activeDeptFilters, activeTypeFilters]);
 
+  // Bookings that actually occur (fully or partly) on the selected day
+  const dayBookings = useMemo(
+    () => filteredBookings.filter(b => occursOnDay(b, currentDate)),
+    [filteredBookings, currentDate]
+  );
+
+  // Per-room events with overlap lanes assigned
+  const roomData = useMemo(() => {
+    const map = {};
+    ROOM_GROUPS.forEach(group => group.rooms.forEach(room => {
+      const key = room.pcoRoomId.trim();
+      const evs = key ? dayBookings.filter(b => b.roomNames.includes(key)) : [];
+      map[room.id] = assignLanes(evs);
+    }));
+    return map;
+  }, [dayBookings]);
+
+  const visibleRooms = useCallback((group) => (
+    hideEmptyRooms
+      ? group.rooms.filter(r => roomData[r.id].events.length > 0)
+      : group.rooms
+  ), [hideEmptyRooms, roomData]);
+
+  const feedBookings = useMemo(
+    () => [...dayBookings].sort((a, b) => new Date(a.start) - new Date(b.start)),
+    [dayBookings]
+  );
+
   const deptTags = useMemo(() => allTags.filter(t => t.groupName === 'Department/Ministries'), [allTags]);
   const eventTypeTags = useMemo(() => allTags.filter(t => t.groupName === 'Event Type'), [allTags]);
 
@@ -231,51 +342,58 @@ const App = () => {
   const groupHeaderHeight = 36;
   const totalHeight = ROOM_GROUPS.reduce((acc, group) => {
     acc += groupHeaderHeight;
-    if (!collapsedGroups[group.id]) acc += group.rooms.length * rowHeight;
+    if (!collapsedGroups[group.id]) acc += visibleRooms(group).length * rowHeight;
     return acc;
   }, 0);
 
-const handleTimeHeaderDrag = (e) => {
-  const isTouch = e.type === 'touchstart';
-  const getX = (event) => isTouch ? event.touches[0].clientX : event.clientX;
+  const handleTimeHeaderDrag = (e) => {
+    const isTouch = e.type === 'touchstart';
+    const getX = (event) => isTouch ? event.touches[0].clientX : event.clientX;
 
-  const startX = getX(e);
-  const startHour = viewStartHour;
-  const headerWidth = e.currentTarget.getBoundingClientRect().width;
-  const hoursPerPixel = visibleHoursCount / headerWidth;
+    const startX = getX(e);
+    const startHour = viewStartHour;
+    const headerWidth = e.currentTarget.getBoundingClientRect().width;
+    const hoursPerPixel = visibleHoursCount / headerWidth;
 
-  const onMove = (moveEvent) => {
-    const x = isTouch ? moveEvent.touches[0].clientX : moveEvent.clientX;
-    const dx = x - startX;
-    const hourDelta = -(dx * hoursPerPixel);
-    const newHour = Math.round(startHour + hourDelta);
-    setViewStartHour(Math.max(0, Math.min(24 - visibleHoursCount, newHour)));
-  };
+    const onMove = (moveEvent) => {
+      const x = isTouch ? moveEvent.touches[0].clientX : moveEvent.clientX;
+      const dx = x - startX;
+      const hourDelta = -(dx * hoursPerPixel);
+      const newHour = Math.round(startHour + hourDelta);
+      setViewStartHour(Math.max(0, Math.min(24 - visibleHoursCount, newHour)));
+    };
 
-  const onUp = () => {
+    const onUp = () => {
+      if (isTouch) {
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('touchend', onUp);
+      } else {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      }
+    };
+
     if (isTouch) {
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onUp);
+      window.addEventListener('touchmove', onMove, { passive: true });
+      window.addEventListener('touchend', onUp);
     } else {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
     }
   };
 
-  if (isTouch) {
-    window.addEventListener('touchmove', onMove, { passive: true });
-    window.addEventListener('touchend', onUp);
-  } else {
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }
-};
+  const copyRoomId = (res) => {
+    navigator.clipboard.writeText(res.name || res.id);
+    setCopiedId(res.id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
 
   const displayDate = new Date(currentDate + 'T12:00:00Z').toLocaleDateString('en-AU', {
     weekday: 'short', day: 'numeric', month: 'short'
   });
 
   const totalActiveFilters = activeDeptFilters.length + activeTypeFilters.length;
+  const nowMs = Date.now();
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -286,68 +404,76 @@ const handleTimeHeaderDrag = (e) => {
             <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg"><Zap size={20} /></div>
             <div>
               <h1 className="text-base md:text-xl font-black uppercase tracking-tight italic text-slate-800 leading-none">FGAM Calendar</h1>
-              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1 mt-1">
-                {filteredBookings.filter(b => getMelbDate(b.start) === currentDate).length} Events
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1 mt-1">
+                {dayBookings.length} Events
                 {totalActiveFilters > 0 && <span className="text-indigo-500">· {totalActiveFilters} filter{totalActiveFilters > 1 ? 's' : ''}</span>}
+                {lastUpdated && <span className="text-slate-400 normal-case tracking-normal">· Updated {fmtTime(lastUpdated)}</span>}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden md:flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-              <button onClick={() => setActiveView('grid')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeView === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>
+              <button onClick={() => setActiveView('grid')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeView === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
                 <LayoutGrid size={14} /> Grid
               </button>
-              <button onClick={() => setActiveView('feed')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeView === 'feed' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>
-                <ListFilter size={14} /> Feed
+              <button onClick={() => setActiveView('feed')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeView === 'feed' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
+                <List size={14} /> Feed
               </button>
             </div>
             <button
               onClick={() => setShowFilters(prev => !prev)}
-              className={`p-2 rounded-xl border transition-all relative ${showFilters || totalActiveFilters > 0 ? 'bg-indigo-100 border-indigo-300 text-indigo-700' : 'bg-white border-slate-200 text-slate-400 shadow-sm'}`}
+              aria-label="Toggle filters"
+              className={`p-2 rounded-xl border transition-all relative ${showFilters || totalActiveFilters > 0 ? 'bg-indigo-100 border-indigo-300 text-indigo-700' : 'bg-white border-slate-200 text-slate-500 shadow-sm'}`}
             >
               <ListFilter size={18} />
               {totalActiveFilters > 0 && (
                 <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">{totalActiveFilters}</span>
               )}
             </button>
-            <button onClick={() => setShowDebug(!showDebug)} className={`hidden md:flex p-2 rounded-xl border transition-all ${showDebug ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-slate-200 text-slate-400 shadow-sm'}`}><Bug size={18} /></button>
-            <button onClick={fetchData} className={`p-2 bg-white rounded-xl border border-slate-200 shadow-sm ${isLoading ? 'animate-spin text-indigo-500' : 'text-slate-400 hover:text-indigo-600'}`}><RefreshCw size={18} /></button>
+            <button onClick={() => setShowDebug(!showDebug)} aria-label="Toggle room discovery panel" className={`hidden md:flex p-2 rounded-xl border transition-all ${showDebug ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-slate-200 text-slate-500 shadow-sm'}`}><Bug size={18} /></button>
+            <button onClick={fetchData} aria-label="Refresh" className="p-2 bg-white rounded-xl border border-slate-200 shadow-sm text-slate-500 hover:text-indigo-600">
+              <RefreshCw size={18} className={isLoading ? 'animate-spin text-indigo-500' : ''} />
+            </button>
           </div>
         </div>
 
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200 flex-1 max-w-xs mx-auto md:mx-0">
-            <button onClick={() => setCurrentDate(shiftDateString(currentDate, -1))}
-              className="p-2 hover:bg-white rounded-xl transition-all shrink-0"><ChevronLeft size={16} /></button>
+            <button onClick={() => setCurrentDate(shiftDateString(currentDate, -1))} aria-label="Previous day"
+              className="p-2.5 hover:bg-white rounded-xl transition-all shrink-0"><ChevronLeft size={18} /></button>
             <div className="relative flex-1">
               <button
                 onClick={() => setShowDatePicker(prev => !prev)}
-                className="w-full font-black text-slate-700 text-center text-xs uppercase tracking-tight hover:text-indigo-600 transition-colors py-1"
+                aria-label="Choose date"
+                className="w-full font-black text-slate-700 text-center text-sm uppercase tracking-tight hover:text-indigo-600 transition-colors py-1.5"
               >
                 {displayDate}
               </button>
               {showDatePicker && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 w-64">
-                  <input
-                    type="date"
-                    value={currentDate}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        setCurrentDate(e.target.value);
-                        setShowDatePicker(false);
-                      }
-                    }}
-                    className="block w-full text-sm text-slate-700 font-bold border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  />
-                  <button onClick={() => setShowDatePicker(false)}
-                    className="mt-2 w-full text-[10px] font-black uppercase text-slate-400 hover:text-slate-600">Close</button>
-                </div>
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowDatePicker(false)} />
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 w-64">
+                    <input
+                      type="date"
+                      value={currentDate}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setCurrentDate(e.target.value);
+                          setShowDatePicker(false);
+                        }
+                      }}
+                      className="block w-full text-sm text-slate-700 font-bold border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                    <button onClick={() => setShowDatePicker(false)}
+                      className="mt-2 w-full text-[10px] font-black uppercase text-slate-500 hover:text-slate-700">Close</button>
+                  </div>
+                </>
               )}
             </div>
-            <button onClick={() => setCurrentDate(shiftDateString(currentDate, 1))}
-              className="p-2 hover:bg-white rounded-xl transition-all shrink-0"><ChevronRight size={16} /></button>
+            <button onClick={() => setCurrentDate(shiftDateString(currentDate, 1))} aria-label="Next day"
+              className="p-2.5 hover:bg-white rounded-xl transition-all shrink-0"><ChevronRight size={18} /></button>
           </div>
-          <button onClick={resetToToday} className="px-3 py-2 bg-white hover:bg-slate-50 text-indigo-600 rounded-2xl text-xs font-black uppercase border border-indigo-100 shadow-sm transition-all flex items-center gap-1.5 shrink-0">
+          <button onClick={resetToToday} className="px-3 py-2.5 bg-white hover:bg-slate-50 text-indigo-600 rounded-2xl text-xs font-black uppercase border border-indigo-100 shadow-sm transition-all flex items-center gap-1.5 shrink-0">
             <RotateCcw size={12} /> Today
           </button>
         </div>
@@ -359,9 +485,9 @@ const handleTimeHeaderDrag = (e) => {
           <div className="flex flex-col gap-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Department / Ministry</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Department / Ministry</span>
                 {activeDeptFilters.length > 0 && (
-                  <button onClick={() => setActiveDeptFilters([])} className="text-[8px] font-black uppercase text-indigo-500">Clear</button>
+                  <button onClick={() => setActiveDeptFilters([])} className="text-[9px] font-black uppercase text-indigo-500">Clear</button>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -369,7 +495,8 @@ const handleTimeHeaderDrag = (e) => {
                   <button
                     key={tag.id}
                     onClick={() => toggleDeptFilter(tag.id)}
-                    className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all border-2 ${activeDeptFilters.includes(tag.id) ? 'border-transparent text-white shadow-md' : 'bg-white text-slate-600 border-slate-200'}`}
+                    aria-pressed={activeDeptFilters.includes(tag.id)}
+                    className={`px-3 py-2 rounded-full text-[11px] font-black uppercase tracking-tight transition-all border-2 ${activeDeptFilters.includes(tag.id) ? 'border-transparent text-white shadow-md' : 'bg-white text-slate-600 border-slate-200'}`}
                     style={activeDeptFilters.includes(tag.id) ? { backgroundColor: darkenHex(tag.color, 0.3), borderColor: darkenHex(tag.color, 0.3) } : {}}
                   >
                     {tag.name}
@@ -379,9 +506,9 @@ const handleTimeHeaderDrag = (e) => {
             </div>
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Event Type</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Event Type</span>
                 {activeTypeFilters.length > 0 && (
-                  <button onClick={() => setActiveTypeFilters([])} className="text-[8px] font-black uppercase text-indigo-500">Clear</button>
+                  <button onClick={() => setActiveTypeFilters([])} className="text-[9px] font-black uppercase text-indigo-500">Clear</button>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -389,7 +516,8 @@ const handleTimeHeaderDrag = (e) => {
                   <button
                     key={tag.id}
                     onClick={() => toggleTypeFilter(tag.id)}
-                    className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all border-2 ${activeTypeFilters.includes(tag.id) ? 'border-transparent text-white shadow-md' : 'bg-white text-slate-600 border-slate-200'}`}
+                    aria-pressed={activeTypeFilters.includes(tag.id)}
+                    className={`px-3 py-2 rounded-full text-[11px] font-black uppercase tracking-tight transition-all border-2 ${activeTypeFilters.includes(tag.id) ? 'border-transparent text-white shadow-md' : 'bg-white text-slate-600 border-slate-200'}`}
                     style={activeTypeFilters.includes(tag.id) ? { backgroundColor: darkenHex(tag.color, 0.3), borderColor: darkenHex(tag.color, 0.3) } : {}}
                   >
                     {tag.name}
@@ -397,11 +525,20 @@ const handleTimeHeaderDrag = (e) => {
                 ))}
               </div>
             </div>
-            {totalActiveFilters > 0 && (
-              <button onClick={clearFilters} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-[10px] font-black uppercase text-slate-500 transition-all self-start">
-                <X size={10} /> Clear All
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setHideEmptyRooms(prev => !prev)}
+                aria-pressed={hideEmptyRooms}
+                className={`px-3 py-2 rounded-full text-[11px] font-black uppercase tracking-tight transition-all border-2 ${hideEmptyRooms ? 'bg-slate-700 border-slate-700 text-white shadow-md' : 'bg-white text-slate-600 border-slate-200'}`}
+              >
+                Hide empty rooms
               </button>
-            )}
+              {totalActiveFilters > 0 && (
+                <button onClick={clearFilters} className="flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-full text-[11px] font-black uppercase text-slate-500 transition-all">
+                  <X size={10} /> Clear All
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -409,16 +546,22 @@ const handleTimeHeaderDrag = (e) => {
       <main className="flex-1 overflow-hidden flex flex-col relative">
         {error && (
           <div className="bg-rose-50 border-b border-rose-100 p-3 flex flex-col items-center gap-2 text-rose-800 shrink-0">
-            <div className="flex items-center gap-2 text-[10px] font-black uppercase"><AlertCircle size={14} /> Connection Error</div>
-            <p className="text-[10px] font-bold text-center opacity-80 max-w-sm">
+            <div className="flex items-center gap-2 text-[11px] font-black uppercase"><AlertCircle size={14} /> Connection Error</div>
+            <p className="text-[11px] font-bold text-center opacity-80 max-w-sm">
               {error.length > 150 ? `${error.substring(0, 150)}...` : error}
             </p>
+            {bookings.length > 0 && (
+              <p className="text-[10px] font-bold text-center opacity-60 max-w-sm">Showing previously loaded data — it may be out of date.</p>
+            )}
+            <button onClick={fetchData} className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full text-[11px] font-black uppercase tracking-widest transition-all">
+              Retry
+            </button>
           </div>
         )}
 
         {activeView === 'grid' && (
-          <div className="flex flex-1 overflow-hidden bg-slate-100/50 p-2 md:p-6">
-            <div className="bg-white rounded-2xl md:rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col">
+          <div className="flex flex-1 overflow-hidden bg-slate-100/50 p-2 md:p-6 pb-16 md:pb-6">
+            <div className={`bg-white rounded-2xl md:rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col transition-opacity duration-300 ${isLoading ? 'opacity-50' : ''}`}>
 
               {/* Fixed header */}
               <div className="flex shrink-0 border-b border-slate-200">
@@ -426,10 +569,10 @@ const handleTimeHeaderDrag = (e) => {
                   className="shrink-0 bg-slate-100/50 border-r border-slate-200 h-12 flex items-center justify-between px-1 md:px-4"
                   style={{ width: `${roomColWidth}px` }}
                 >
-                  <span className="uppercase tracking-widest text-[8px] md:text-[9px] font-black text-slate-400 hidden md:block">Rooms</span>
+                  <span className="uppercase tracking-widest text-[9px] font-black text-slate-500 hidden md:block">Rooms</span>
                   <div className="flex items-center gap-0.5">
-                    <button onClick={() => shiftTime(-1)} disabled={viewStartHour === 0} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowLeft size={10} /></button>
-                    <button onClick={() => shiftTime(1)} disabled={viewStartHour >= 24 - visibleHoursCount} className="p-1 hover:bg-white rounded-lg text-slate-400 disabled:opacity-20"><ArrowRight size={10} /></button>
+                    <button onClick={() => shiftTime(-1)} disabled={viewStartHour === 0} aria-label="Earlier hours" className="p-2 hover:bg-white rounded-lg text-slate-500 disabled:opacity-20"><ArrowLeft size={12} /></button>
+                    <button onClick={() => shiftTime(1)} disabled={viewStartHour >= 24 - visibleHoursCount} aria-label="Later hours" className="p-2 hover:bg-white rounded-lg text-slate-500 disabled:opacity-20"><ArrowRight size={12} /></button>
                   </div>
                 </div>
                 <div
@@ -438,7 +581,7 @@ const handleTimeHeaderDrag = (e) => {
                   onTouchStart={handleTimeHeaderDrag}
                 >
                   {Array.from({ length: visibleHoursCount }, (_, i) => viewStartHour + i).map(hour => (
-                    <div key={hour} className="flex-1 border-r border-slate-100 h-12 flex items-center justify-center text-[8px] md:text-[10px] font-black text-slate-400 uppercase italic pointer-events-none">
+                    <div key={hour} className="flex-1 border-r border-slate-100 h-12 flex items-center justify-center text-[10px] md:text-[11px] font-black text-slate-500 uppercase italic pointer-events-none">
                       {hour % 12 || 12}{hour >= 12 ? 'P' : 'A'}
                     </div>
                   ))}
@@ -457,20 +600,21 @@ const handleTimeHeaderDrag = (e) => {
                     <div key={group.id}>
                       <button
                         onClick={() => toggleGroup(group.id)}
+                        aria-label={`Toggle ${group.label}`}
                         className="w-full flex items-center justify-between px-1 md:px-3 text-white font-black uppercase"
-                        style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id], fontSize: isMobile ? '7px' : '9px' }}
+                        style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id], fontSize: isMobile ? '9px' : '10px' }}
                       >
                         <span className="truncate">{isMobile ? group.label.split(' ')[1] || group.label : group.label}</span>
-                        {collapsedGroups[group.id] ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
+                        {collapsedGroups[group.id] ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
                       </button>
-                      {!collapsedGroups[group.id] && group.rooms.map(room => (
+                      {!collapsedGroups[group.id] && visibleRooms(group).map(room => (
                         <div
                           key={room.id}
                           className="border-b border-slate-100 px-1 md:px-3 flex items-center hover:bg-slate-100/50 transition-colors bg-white"
                           style={{ height: `${rowHeight}px` }}
                         >
-                          <span className="font-black text-slate-800 uppercase tracking-tight truncate leading-tight hidden md:block text-[11px]">{room.displayName}</span>
-                          <span className="font-black text-slate-800 uppercase tracking-tight truncate leading-tight md:hidden text-[8px]">{room.shortName}</span>
+                          <span className="font-black text-slate-800 uppercase tracking-tight truncate leading-tight hidden md:block text-[13px]">{room.displayName}</span>
+                          <span className="font-black text-slate-800 uppercase tracking-tight truncate leading-tight md:hidden text-[10px]">{room.shortName}</span>
                         </div>
                       ))}
                     </div>
@@ -494,42 +638,47 @@ const handleTimeHeaderDrag = (e) => {
                         className="w-full opacity-20"
                         style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id] }}
                       />
-                      {!collapsedGroups[group.id] && group.rooms.map(room => (
-                        <div
-                          key={room.id}
-                          className="flex border-b border-slate-100 relative group overflow-hidden"
-                          style={{ height: `${rowHeight}px` }}
-                        >
-                          {Array.from({ length: visibleHoursCount }).map((_, i) => (
-                            <div key={i} className="flex-1 border-r border-slate-50/50 group-hover:bg-slate-50/10 transition-colors"></div>
-                          ))}
-                          {filteredBookings
-                            .filter(b => {
-                              if (!b.roomNames.includes(room.pcoRoomId) || room.pcoRoomId === "") return false;
-                              return getMelbDate(b.start) === currentDate;
-                            })
-                            .map(b => (
-                              <div
+                      {!collapsedGroups[group.id] && visibleRooms(group).map(room => {
+                        const { events: lanedEvents, laneCount } = roomData[room.id];
+                        const laneH = (rowHeight - 8) / laneCount;
+                        return (
+                          <div
+                            key={room.id}
+                            className="flex border-b border-slate-100 relative group overflow-hidden"
+                            style={{ height: `${rowHeight}px` }}
+                          >
+                            {Array.from({ length: visibleHoursCount }).map((_, i) => (
+                              <div key={i} className="flex-1 border-r border-slate-50/50 group-hover:bg-slate-50/10 transition-colors"></div>
+                            ))}
+                            {lanedEvents.map(b => (
+                              <button
                                 key={b.id}
+                                onClick={() => setSelectedEvent(b)}
+                                aria-label={`${b.title}, ${fmtTime(b.start)} to ${fmtTime(b.end)}`}
                                 style={{
                                   ...getEventStyle(b),
+                                  top: `${4 + b.lane * laneH}px`,
+                                  height: `${laneH - (laneCount > 1 ? 2 : 0)}px`,
                                   backgroundColor: darkenHex(b.eventColor, 0.3),
                                   borderLeftColor: darkenHex(b.eventColor, 0.5)
                                 }}
-                                className="absolute top-1 h-14 rounded-lg md:rounded-xl p-1 md:p-2 shadow-lg border-l-4 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center overflow-hidden"
+                                className="absolute rounded-lg md:rounded-xl px-1.5 md:px-2 py-0.5 shadow-lg border-l-4 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center overflow-hidden text-left cursor-pointer"
                               >
-                                <p className="text-[8px] md:text-[9px] font-black truncate uppercase leading-tight drop-shadow-sm">{b.title}</p>
-                                <p className="text-[7px] font-bold opacity-90 uppercase mt-0.5 flex items-center gap-0.5">
-                                  <Clock size={7} className="shrink-0" />
-                                  {new Date(b.start).toLocaleTimeString('en-AU', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })}
-                                </p>
-                                {!isMobile && b.departmentTags.length > 0 && (
-                                  <p className="text-[7px] font-black opacity-90 uppercase mt-0.5 truncate">{b.departmentTags.map(t => t.name).join(', ')}</p>
+                                <p className="text-[10px] md:text-[11px] font-black truncate uppercase leading-tight drop-shadow-sm">{b.title}</p>
+                                {laneH >= 40 && (
+                                  <p className="text-[9px] font-bold opacity-90 uppercase mt-0.5 flex items-center gap-1">
+                                    <Clock size={9} className="shrink-0" />
+                                    {fmtTime(b.start)}
+                                  </p>
                                 )}
-                              </div>
+                                {!isMobile && laneH >= 52 && b.departmentTags.length > 0 && (
+                                  <p className="text-[9px] font-black opacity-90 uppercase mt-0.5 truncate">{b.departmentTags.map(t => t.name).join(', ')}</p>
+                                )}
+                              </button>
                             ))}
-                        </div>
-                      ))}
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
@@ -539,32 +688,43 @@ const handleTimeHeaderDrag = (e) => {
         )}
 
         {activeView === 'feed' && (
-          <div className="flex-1 overflow-auto bg-slate-100/50">
+          <div className={`flex-1 overflow-auto bg-slate-100/50 transition-opacity duration-300 ${isLoading ? 'opacity-50' : ''}`}>
             <div className="max-w-2xl mx-auto px-3 md:px-6 py-4 space-y-3 pb-24">
-              {filteredBookings.length > 0 ? filteredBookings
-                .filter(b => getMelbDate(b.start) === currentDate)
-                .sort((a, b) => new Date(a.start) - new Date(b.start))
-                .map(b => (
-                  <div key={b.id} className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm overflow-hidden relative">
+              {feedBookings.length > 0 ? feedBookings.map(b => {
+                const isNow = new Date(b.start).getTime() <= nowMs && nowMs < new Date(b.end).getTime();
+                const isPast = new Date(b.end).getTime() < nowMs;
+                const startsOtherDay = getMelbDate(b.start) !== currentDate;
+                const endsOtherDay = getMelbDate(b.end) !== currentDate;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => setSelectedEvent(b)}
+                    className={`w-full text-left bg-white rounded-2xl md:rounded-3xl border shadow-sm overflow-hidden relative transition-all hover:shadow-md ${isNow ? 'border-indigo-300 ring-2 ring-indigo-200' : 'border-slate-200'} ${isPast ? 'opacity-60' : ''}`}
+                  >
                     <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ backgroundColor: darkenHex(b.eventColor, 0.3) }} />
                     <div className="pl-5 pr-4 py-4 flex items-start gap-3">
                       <div className="w-12 h-12 bg-slate-50 rounded-xl flex flex-col items-center justify-center border border-slate-100 shrink-0">
-                        <span className="text-[8px] font-black uppercase text-slate-400 leading-none">{new Date(b.start).toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short' })}</span>
+                        <span className="text-[9px] font-black uppercase text-slate-500 leading-none">{new Date(b.start).toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short' })}</span>
                         <span className="text-base font-black text-slate-800 leading-none mt-0.5">{new Date(b.start).toLocaleDateString('en-AU', { timeZone: TZ, day: 'numeric' })}</span>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-black text-slate-800 text-sm uppercase tracking-tight leading-tight">{b.title}</h3>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-black text-slate-800 text-[15px] uppercase tracking-tight leading-tight">{b.title}</h3>
+                          {isNow && <span className="text-[9px] font-black uppercase bg-indigo-600 text-white px-2 py-0.5 rounded-full">Now</span>}
+                        </div>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
-                          <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                            <Clock size={10} className="text-indigo-400 shrink-0" />
-                            {new Date(b.start).toLocaleTimeString('en-AU', { timeZone: TZ, hour: '2-digit', minute: '2-digit' })}
+                          <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                            <Clock size={11} className="text-indigo-400 shrink-0" />
+                            {startsOtherDay && `${new Date(b.start).toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short' })} `}
+                            {fmtTime(b.start)}
                             {' – '}
-                            {new Date(b.end).toLocaleTimeString('en-AU', { timeZone: TZ, hour: '2-digit', minute: '2-digit' })}
+                            {endsOtherDay && `${new Date(b.end).toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short' })} `}
+                            {fmtTime(b.end)}
                           </span>
                           {b.roomNames.length > 0 && (
-                            <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                              <Users size={10} className="text-indigo-400 shrink-0" />
-                              {b.roomNames.join(', ')}
+                            <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                              <Users size={11} className="text-indigo-400 shrink-0" />
+                              {b.roomNames.map(displayRoomName).join(', ')}
                             </span>
                           )}
                         </div>
@@ -573,7 +733,7 @@ const handleTimeHeaderDrag = (e) => {
                             {b.departmentTags.map(tag => (
                               <span
                                 key={tag.id}
-                                className="text-[8px] font-black px-2 py-0.5 rounded-full uppercase"
+                                className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase"
                                 style={{ backgroundColor: hexToRgba(tag.color, 0.15), color: darkenHex(tag.color, 0.4) }}
                               >
                                 {tag.name}
@@ -582,7 +742,7 @@ const handleTimeHeaderDrag = (e) => {
                             {b.eventTypeTags.map(tag => (
                               <span
                                 key={tag.id}
-                                className="text-[8px] font-black px-2 py-0.5 rounded-full uppercase border"
+                                className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase border"
                                 style={{ borderColor: hexToRgba(tag.color, 0.5), color: darkenHex(tag.color, 0.4) }}
                               >
                                 {tag.name}
@@ -592,11 +752,18 @@ const handleTimeHeaderDrag = (e) => {
                         )}
                       </div>
                     </div>
-                  </div>
-                )) : (
-                <div className="text-center py-20 opacity-40 flex flex-col items-center gap-4">
-                  <RefreshCw className="animate-spin text-slate-300" size={40} />
-                  <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">No Events Found.</p>
+                  </button>
+                );
+              }) : (
+                <div className="text-center py-20 opacity-50 flex flex-col items-center gap-4">
+                  {isLoading ? (
+                    <RefreshCw className="animate-spin text-slate-300" size={40} />
+                  ) : (
+                    <CalendarDays className="text-slate-300" size={40} />
+                  )}
+                  <p className="text-slate-500 font-bold uppercase text-[11px] tracking-widest">
+                    {isLoading ? 'Loading events…' : 'No events on this day'}
+                  </p>
                 </div>
               )}
             </div>
@@ -604,25 +771,75 @@ const handleTimeHeaderDrag = (e) => {
         )}
       </main>
 
+      {/* Event detail modal */}
+      {selectedEvent && (
+        <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center" role="dialog" aria-modal="true" aria-label="Event details">
+          <div className="absolute inset-0 bg-slate-900/50" onClick={() => setSelectedEvent(null)} />
+          <div className="relative bg-white w-full md:max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="h-2 shrink-0" style={{ backgroundColor: darkenHex(selectedEvent.eventColor, 0.3) }} />
+            <div className="p-5 md:p-6 overflow-y-auto">
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="font-black text-slate-800 text-lg uppercase tracking-tight leading-tight">{selectedEvent.title}</h2>
+                <button onClick={() => setSelectedEvent(null)} aria-label="Close" className="p-2 -m-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <CalendarDays size={16} className="text-indigo-500 mt-0.5 shrink-0" />
+                  <p className="text-sm font-bold text-slate-700">
+                    {getMelbDate(selectedEvent.start) === getMelbDate(selectedEvent.end)
+                      ? `${fmtDay(selectedEvent.start)} · ${fmtTime(selectedEvent.start)} – ${fmtTime(selectedEvent.end)}`
+                      : `${fmtDay(selectedEvent.start)} ${fmtTime(selectedEvent.start)} – ${fmtDay(selectedEvent.end)} ${fmtTime(selectedEvent.end)}`}
+                  </p>
+                </div>
+                {selectedEvent.roomNames.length > 0 && (
+                  <div className="flex items-start gap-3">
+                    <Users size={16} className="text-indigo-500 mt-0.5 shrink-0" />
+                    <p className="text-sm font-bold text-slate-700">{selectedEvent.roomNames.map(displayRoomName).join(', ')}</p>
+                  </div>
+                )}
+                {(selectedEvent.departmentTags.length > 0 || selectedEvent.eventTypeTags.length > 0) && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {selectedEvent.departmentTags.map(tag => (
+                      <span key={tag.id} className="text-[10px] font-black px-2.5 py-1 rounded-full uppercase"
+                        style={{ backgroundColor: hexToRgba(tag.color, 0.15), color: darkenHex(tag.color, 0.4) }}>
+                        {tag.name}
+                      </span>
+                    ))}
+                    {selectedEvent.eventTypeTags.map(tag => (
+                      <span key={tag.id} className="text-[10px] font-black px-2.5 py-1 rounded-full uppercase border"
+                        style={{ borderColor: hexToRgba(tag.color, 0.5), color: darkenHex(tag.color, 0.4) }}>
+                        {tag.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile bottom nav */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 flex items-center justify-around z-40 shadow-lg">
         <button
           onClick={() => setActiveView('feed')}
-          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${activeView === 'feed' ? 'text-indigo-600' : 'text-slate-400'}`}
+          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${activeView === 'feed' ? 'text-indigo-600' : 'text-slate-500'}`}
         >
-          <ListFilter size={20} />
+          <List size={20} />
           <span className="text-[9px] font-black uppercase tracking-widest">Feed</span>
         </button>
         <button
           onClick={() => setActiveView('grid')}
-          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${activeView === 'grid' ? 'text-indigo-600' : 'text-slate-400'}`}
+          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${activeView === 'grid' ? 'text-indigo-600' : 'text-slate-500'}`}
         >
           <LayoutGrid size={20} />
           <span className="text-[9px] font-black uppercase tracking-widest">Grid</span>
         </button>
         <button
           onClick={() => setShowFilters(prev => !prev)}
-          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all relative ${showFilters || totalActiveFilters > 0 ? 'text-indigo-600' : 'text-slate-400'}`}
+          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all relative ${showFilters || totalActiveFilters > 0 ? 'text-indigo-600' : 'text-slate-500'}`}
         >
           <ListFilter size={20} />
           {totalActiveFilters > 0 && (
@@ -632,9 +849,9 @@ const handleTimeHeaderDrag = (e) => {
         </button>
         <button
           onClick={fetchData}
-          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all text-slate-400 ${isLoading ? 'animate-spin text-indigo-500' : ''}`}
+          className="flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all text-slate-500"
         >
-          <RefreshCw size={20} />
+          <RefreshCw size={20} className={isLoading ? 'animate-spin text-indigo-500' : ''} />
           <span className="text-[9px] font-black uppercase tracking-widest">Refresh</span>
         </button>
       </div>
@@ -652,12 +869,18 @@ const handleTimeHeaderDrag = (e) => {
                   <p className="font-black text-[11px] text-slate-800 truncate uppercase tracking-tight">{res.name || 'Unnamed'}</p>
                   <code className="text-[10px] font-mono text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded mt-1 inline-block">{res.id}</code>
                 </div>
-                <button onClick={() => { navigator.clipboard.writeText(res.name || res.id); alert(`Copied!`); }} className="p-2 bg-slate-50 rounded-xl text-slate-400 hover:text-indigo-600"><CheckCircle2 size={16} /></button>
+                <button
+                  onClick={() => copyRoomId(res)}
+                  aria-label={`Copy ${res.name || res.id}`}
+                  className={`p-2 rounded-xl transition-all ${copiedId === res.id ? 'bg-green-50 text-green-600' : 'bg-slate-50 text-slate-500 hover:text-indigo-600'}`}
+                >
+                  {copiedId === res.id ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+                </button>
               </div>
             )) : (
               <div className="col-span-full py-12 flex flex-col items-center gap-3">
                 <ShieldAlert className="text-amber-400" size={28} />
-                <p className="text-[10px] font-black uppercase text-amber-900">No room data available</p>
+                <p className="text-[11px] font-black uppercase text-amber-900">No room data available</p>
               </div>
             )}
           </div>
