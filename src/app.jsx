@@ -253,6 +253,29 @@ const App = () => {
     return () => clearInterval(id);
   }, []);
 
+  // Trackpad/mouse-wheel horizontal swipe pans the time window.
+  // Native (non-passive) listener so we can preventDefault and block
+  // the browser's back/forward swipe gesture.
+  const gridRef = useRef(null);
+  const wheelAccum = useRef(0);
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const PX_PER_HOUR = 50;
+    const onWheel = (e) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return; // vertical scroll: leave alone
+      e.preventDefault();
+      wheelAccum.current += e.deltaX;
+      const hours = Math.trunc(wheelAccum.current / PX_PER_HOUR);
+      if (hours !== 0) {
+        wheelAccum.current -= hours * PX_PER_HOUR;
+        setViewStartHour(prev => Math.max(0, Math.min(24 - visibleHoursCount, prev + hours)));
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [activeView, visibleHoursCount]);
+
   // Escape closes modal / date picker
   useEffect(() => {
     const onKey = (e) => {
@@ -565,7 +588,7 @@ const App = () => {
 
         {activeView === 'grid' && (
           <div className="flex flex-1 overflow-hidden bg-slate-100/50 p-2 md:p-6 pb-16 md:pb-6">
-            <div className={`bg-white rounded-2xl md:rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col transition-opacity duration-300 ${isLoading ? 'opacity-50' : ''}`}>
+            <div ref={gridRef} className={`bg-white rounded-2xl md:rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col transition-opacity duration-300 ${isLoading ? 'opacity-50' : ''}`}>
 
               {/* Fixed header */}
               <div className="flex shrink-0 border-b border-slate-200">
