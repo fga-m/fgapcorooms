@@ -64,21 +64,28 @@ export default async function handler(req, res) {
     prevDay.setUTCDate(prevDay.getUTCDate() - 1);
     const startStrWide = prevDay.toISOString().split('T')[0] + 'T13:00:00Z';
 
+    const includeWithOwner = 'include=event,event.owner,resource_bookings,tags';
     const include = 'include=event,resource_bookings,tags';
 
-    // Overlap query: catches multi-day events that started before the window
-    const overlapUrl = `${PCO_BASE}/event_instances?${include}&where[starts_at][lte]=${endStr}&where[ends_at][gte]=${startStrWide}&order=starts_at&per_page=100`;
-    // Fallback (original behaviour) in case ends_at filtering is rejected
-    const fallbackUrl = `${PCO_BASE}/event_instances?${include}&where[starts_at][gte]=${startStrWide}&where[starts_at][lte]=${endStr}&per_page=100`;
+    const overlapWhere = `where[starts_at][lte]=${endStr}&where[ends_at][gte]=${startStrWide}`;
+    const fallbackWhere = `where[starts_at][gte]=${startStrWide}&where[starts_at][lte]=${endStr}`;
+
+    // Try richest query first, degrade gracefully:
+    // 1. overlap window + event owner  2. overlap window  3. original starts_at window
+    const candidateUrls = [
+      `${PCO_BASE}/event_instances?${includeWithOwner}&${overlapWhere}&order=starts_at&per_page=100`,
+      `${PCO_BASE}/event_instances?${include}&${overlapWhere}&order=starts_at&per_page=100`,
+      `${PCO_BASE}/event_instances?${include}&${fallbackWhere}&per_page=100`
+    ];
 
     let [eventResult, roomsResult, tagsResult] = await Promise.all([
-      fetchAllPages(overlapUrl, headers),
+      fetchAllPages(candidateUrls[0], headers),
       fetchAllPages(`${PCO_BASE}/rooms?per_page=100`, headers),
       fetchAllPages(`${PCO_BASE}/tags?include=tag_group&per_page=100`, headers)
     ]);
 
-    if (!eventResult.ok) {
-      eventResult = await fetchAllPages(fallbackUrl, headers);
+    for (let i = 1; i < candidateUrls.length && !eventResult.ok; i++) {
+      eventResult = await fetchAllPages(candidateUrls[i], headers);
     }
 
     if (!eventResult.ok) {
@@ -129,19 +136,35 @@ export default async function handler(req, res) {
 
     const included = eventResult.included;
 
-    // Enrich each instance with resolved room names and tags
+    // Enrich each instance with resolved rooms (id + name), tags and owner
     const instances = eventResult.data.map(instance => {
       const bookingRefs = instance.relationships?.resource_bookings?.data || [];
-      const roomNames = bookingRefs
-        .map(ref => {
-          const booking = included.find(
-            inc => inc.type === 'ResourceBooking' && inc.id === ref.id
-          );
-          if (!booking) return null;
-          const resourceId = booking.relationships?.resource?.data?.id;
-          return resourceId ? (resourceMap[resourceId] || null) : null;
-        })
-        .filter(Boolean);
+      const roomObjs = [];
+      for (const ref of bookingRefs) {
+        const booking = included.find(
+          inc => inc.type === 'ResourceBooking' && inc.id === ref.id
+        );
+        if (!booking) continue;
+        const resourceId = booking.relationships?.resource?.data?.id;
+        if (!resourceId || roomObjs.some(r => r.id === resourceId)) continue;
+        roomObjs.push({ id: resourceId, name: resourceMap[resourceId] || null });
+      }
+      const roomNames = roomObjs.map(r => r.name).filter(Boolean);
+
+      // Resolve the event owner ("booked by") when included
+      const eventId = instance.relationships?.event?.data?.id;
+      const eventData = eventId
+        ? included.find(inc => inc.type === 'Event' && inc.id === eventId)
+        : null;
+      const ownerId = eventData?.relationships?.owner?.data?.id;
+      const owner = ownerId
+        ? included.find(inc => inc.type === 'Person' && inc.id === ownerId)
+        : null;
+      const eventOwner = owner
+        ? (owner.attributes?.name ||
+           [owner.attributes?.first_name, owner.attributes?.last_name].filter(Boolean).join(' ') ||
+           null)
+        : null;
 
       // Resolve tags from included
       const tagRefs = instance.relationships?.tags?.data || [];
@@ -158,6 +181,8 @@ export default async function handler(req, res) {
       return {
         ...instance,
         resolvedRooms: [...new Set(roomNames)],
+        resolvedRoomObjs: roomObjs,
+        eventOwner,
         resolvedTags,
         departmentTags,
         eventTypeTags,

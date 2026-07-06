@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   ChevronLeft, ChevronRight, Clock, Users, AlertCircle, Bug, RefreshCw,
   Zap, RotateCcw, CheckCircle2, ArrowLeft, ArrowRight, ShieldAlert,
-  ListFilter, LayoutGrid, ChevronDown, ChevronUp, X, List, CalendarDays, Copy
+  ListFilter, LayoutGrid, ChevronDown, ChevronUp, X, List, CalendarDays, Copy, User
 } from 'lucide-react';
 
 const ROOM_GROUPS = [
@@ -11,38 +11,38 @@ const ROOM_GROUPS = [
     id: 'level2',
     label: 'Level 2',
     rooms: [
-      { id: 'r1', pcoRoomId: 'Level 2 - Sanctuary', displayName: 'Sanctuary', shortName: 'Sanct.' },
-      { id: 'r2', pcoRoomId: 'Level 2 - Main Lobby', displayName: 'Main Lobby', shortName: 'Lobby' },
-      { id: 'r3', pcoRoomId: 'Level 2 - Multipurpose Room', displayName: 'Multipurpose Room', shortName: 'MP Room' },
-      { id: 'r4', pcoRoomId: 'Level 2 - Meeting Room 1', displayName: 'Meeting Room 1', shortName: 'MR 1' },
-      { id: 'r5', pcoRoomId: 'Level 2 - Meeting Room 2', displayName: 'Meeting Room 2', shortName: 'MR 2' },
-      { id: 'r6', pcoRoomId: 'Level 2 - Meeting Room 3', displayName: 'Meeting Room 3', shortName: 'MR 3' },
-      { id: 'r7', pcoRoomId: 'Level 2 - Meeting Room 5', displayName: 'Meeting Room 5', shortName: 'MR 5' },
-      { id: 'r8', pcoRoomId: 'Level 2 - Commercial Kitchen', displayName: 'Commercial Kitchen', shortName: 'Kitchen' },
-      { id: 'r9', pcoRoomId: 'Level 2 - Backstage Area', displayName: 'Backstage Area', shortName: 'Bkstage' },
-      { id: 'r10', pcoRoomId: 'Level 2 - Guest Central', displayName: 'Guest Central', shortName: 'Guest' },
+      { id: 'r1', resourceId: '725944', pcoRoomId: 'Level 2 - Sanctuary', displayName: 'Sanctuary', shortName: 'Sanct.' },
+      { id: 'r2', resourceId: '746771', pcoRoomId: 'Level 2 - Main Lobby', displayName: 'Main Lobby', shortName: 'Lobby' },
+      { id: 'r3', resourceId: '746776', pcoRoomId: 'Level 2 - Multipurpose Room', displayName: 'Multipurpose Room', shortName: 'MP Room' },
+      { id: 'r4', resourceId: '746772', pcoRoomId: 'Level 2 - Meeting Room 1', displayName: 'Meeting Room 1', shortName: 'MR 1' },
+      { id: 'r5', resourceId: '746773', pcoRoomId: 'Level 2 - Meeting Room 2', displayName: 'Meeting Room 2', shortName: 'MR 2' },
+      { id: 'r6', resourceId: '746774', pcoRoomId: 'Level 2 - Meeting Room 3', displayName: 'Meeting Room 3', shortName: 'MR 3' },
+      { id: 'r7', resourceId: '746775', pcoRoomId: 'Level 2 - Meeting Room 5', displayName: 'Meeting Room 5', shortName: 'MR 5' },
+      { id: 'r8', resourceId: '746769', pcoRoomId: 'Level 2 - Commercial Kitchen', displayName: 'Commercial Kitchen', shortName: 'Kitchen' },
+      { id: 'r9', resourceId: '746768', pcoRoomId: 'Level 2 - Backstage Area', displayName: 'Backstage Area', shortName: 'Bkstage' },
+      { id: 'r10', resourceId: '746770', pcoRoomId: 'Level 2 - Guest Central', displayName: 'Guest Central', shortName: 'Guest' },
     ]
   },
   {
     id: 'level1',
     label: 'Level 1',
     rooms: [
-      { id: 'r11', pcoRoomId: 'Level 1 - Large Meeting Room ', displayName: 'Large Meeting Room', shortName: 'Large MR' },
-      { id: 'r12', pcoRoomId: 'Level 1 - Open Office Area', displayName: 'Open Office Area', shortName: 'Open Off.' },
-      { id: 'r13', pcoRoomId: "Level 1 - Chris' Office", displayName: "Chris' Office", shortName: "Chris'" },
-      { id: 'r14', pcoRoomId: 'Level 1 - Staff Kitchen', displayName: 'Staff Kitchen', shortName: 'St. Kit.' },
-      { id: 'r15', pcoRoomId: 'Level 1 - REACH Office', displayName: 'REACH Office', shortName: 'REACH' },
-      { id: 'r16', pcoRoomId: 'Covered rooftop carpark', displayName: 'Rooftop Carpark', shortName: 'Rooftop' },
+      { id: 'r11', resourceId: '746764', pcoRoomId: 'Level 1 - Large Meeting Room ', displayName: 'Large Meeting Room', shortName: 'Large MR' },
+      { id: 'r12', resourceId: '746765', pcoRoomId: 'Level 1 - Open Office Area', displayName: 'Open Office Area', shortName: 'Open Off.' },
+      { id: 'r13', resourceId: '746763', pcoRoomId: "Level 1 - Chris' Office", displayName: "Chris' Office", shortName: "Chris'" },
+      { id: 'r14', resourceId: '746767', pcoRoomId: 'Level 1 - Staff Kitchen', displayName: 'Staff Kitchen', shortName: 'St. Kit.' },
+      { id: 'r15', resourceId: '746766', pcoRoomId: 'Level 1 - REACH Office', displayName: 'REACH Office', shortName: 'REACH' },
+      { id: 'r16', resourceId: '817137', pcoRoomId: 'Covered rooftop carpark', displayName: 'Rooftop Carpark', shortName: 'Rooftop' },
     ]
   },
   {
     id: 'online',
     label: 'Online',
     rooms: [
-      { id: 'r17', pcoRoomId: '/zoom', displayName: 'Zoom 1', shortName: 'Z1' },
-      { id: 'r18', pcoRoomId: '/zoom2', displayName: 'Zoom 2', shortName: 'Z2' },
-      { id: 'r19', pcoRoomId: '/zoom3', displayName: 'Zoom 3', shortName: 'Z3' },
-      { id: 'r20', pcoRoomId: '/zoom4', displayName: 'Zoom 4', shortName: 'Z4' },
+      { id: 'r17', resourceId: '746778', pcoRoomId: '/zoom', displayName: 'Zoom 1', shortName: 'Z1' },
+      { id: 'r18', resourceId: '746779', pcoRoomId: '/zoom2', displayName: 'Zoom 2', shortName: 'Z2' },
+      { id: 'r19', resourceId: '746780', pcoRoomId: '/zoom3', displayName: 'Zoom 3', shortName: 'Z3' },
+      { id: 'r20', resourceId: '746781', pcoRoomId: '/zoom4', displayName: 'Zoom 4', shortName: 'Z4' },
     ]
   }
 ];
@@ -55,11 +55,33 @@ const GROUP_COLORS = {
 
 const TZ = 'Australia/Melbourne';
 
-// PCO room name (trimmed) -> friendly display name
+// PCO room name (trimmed) -> friendly display name, and resource ID lookups.
+// Matching is by PCO resource ID (rename-proof); names are a fallback.
 const PCO_NAME_TO_DISPLAY = {};
-ROOM_GROUPS.forEach(g => g.rooms.forEach(r => { PCO_NAME_TO_DISPLAY[r.pcoRoomId.trim()] = r.displayName; }));
+const PCO_ID_TO_DISPLAY = {};
+ROOM_GROUPS.forEach(g => g.rooms.forEach(r => {
+  PCO_NAME_TO_DISPLAY[r.pcoRoomId.trim()] = r.displayName;
+  if (r.resourceId) PCO_ID_TO_DISPLAY[r.resourceId] = r.displayName;
+}));
 const displayRoomName = (pcoName) => PCO_NAME_TO_DISPLAY[(pcoName || '').trim()] || pcoName;
 const KNOWN_ROOM_KEYS = new Set(Object.keys(PCO_NAME_TO_DISPLAY));
+const KNOWN_ROOM_IDS = new Set(Object.keys(PCO_ID_TO_DISPLAY));
+
+// Friendly labels for a booking's rooms (prefer ID lookup, fall back to names)
+const bookingRoomLabels = (b) => {
+  if (b.rooms && b.rooms.length > 0) {
+    return b.rooms.map(r => PCO_ID_TO_DISPLAY[r.id] || displayRoomName(r.name) || r.name).filter(Boolean);
+  }
+  return (b.roomNames || []).map(displayRoomName);
+};
+
+const bookingInKnownRoom = (b) =>
+  (b.rooms || []).some(r => KNOWN_ROOM_IDS.has(r.id)) ||
+  (b.roomNames || []).some(n => KNOWN_ROOM_KEYS.has(n));
+
+const bookingMatchesRoom = (b, room) =>
+  (b.rooms || []).some(r => r.id === room.resourceId) ||
+  (room.pcoRoomId.trim() !== '' && (b.roomNames || []).includes(room.pcoRoomId.trim()));
 
 const getMelbHour = (date) => {
   const parts = new Intl.DateTimeFormat('en-AU', {
@@ -210,6 +232,8 @@ const App = () => {
           start: instance.attributes?.starts_at,
           end: instance.attributes?.ends_at,
           roomNames: (instance.resolvedRooms || []).map(n => (n || '').trim()),
+          rooms: instance.resolvedRoomObjs || [],
+          owner: instance.eventOwner || null,
           tags: instance.resolvedTags || [],
           departmentTags: instance.departmentTags || [],
           eventTypeTags: instance.eventTypeTags || [],
@@ -338,7 +362,7 @@ const App = () => {
   // and occupy at least one tracked room (physical or Zoom)
   const dayBookings = useMemo(
     () => filteredBookings.filter(b =>
-      occursOnDay(b, currentDate) && b.roomNames.some(n => KNOWN_ROOM_KEYS.has(n))
+      occursOnDay(b, currentDate) && bookingInKnownRoom(b)
     ),
     [filteredBookings, currentDate]
   );
@@ -347,9 +371,7 @@ const App = () => {
   const roomData = useMemo(() => {
     const map = {};
     ROOM_GROUPS.forEach(group => group.rooms.forEach(room => {
-      const key = room.pcoRoomId.trim();
-      const evs = key ? dayBookings.filter(b => b.roomNames.includes(key)) : [];
-      map[room.id] = assignLanes(evs);
+      map[room.id] = assignLanes(dayBookings.filter(b => bookingMatchesRoom(b, room)));
     }));
     return map;
   }, [dayBookings]);
@@ -795,10 +817,10 @@ const App = () => {
                             {endsOtherDay && `${new Date(b.end).toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'short' })} `}
                             {fmtTime(b.end)}
                           </span>
-                          {b.roomNames.length > 0 && (
+                          {bookingRoomLabels(b).length > 0 && (
                             <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
                               <Users size={11} className="text-indigo-400 shrink-0" />
-                              {b.roomNames.map(displayRoomName).join(', ')}
+                              {bookingRoomLabels(b).join(', ')}
                             </span>
                           )}
                         </div>
@@ -867,10 +889,16 @@ const App = () => {
                       : `${fmtDay(selectedEvent.start)} ${fmtTime(selectedEvent.start)} – ${fmtDay(selectedEvent.end)} ${fmtTime(selectedEvent.end)}`}
                   </p>
                 </div>
-                {selectedEvent.roomNames.length > 0 && (
+                {bookingRoomLabels(selectedEvent).length > 0 && (
                   <div className="flex items-start gap-3">
                     <Users size={16} className="text-indigo-500 mt-0.5 shrink-0" />
-                    <p className="text-sm font-bold text-slate-700">{selectedEvent.roomNames.map(displayRoomName).join(', ')}</p>
+                    <p className="text-sm font-bold text-slate-700">{bookingRoomLabels(selectedEvent).join(', ')}</p>
+                  </div>
+                )}
+                {selectedEvent.owner && (
+                  <div className="flex items-start gap-3">
+                    <User size={16} className="text-indigo-500 mt-0.5 shrink-0" />
+                    <p className="text-sm font-bold text-slate-700">Booked by {selectedEvent.owner}</p>
                   </div>
                 )}
                 {(selectedEvent.departmentTags.length > 0 || selectedEvent.eventTypeTags.length > 0) && (
