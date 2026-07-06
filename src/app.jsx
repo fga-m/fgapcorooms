@@ -230,7 +230,7 @@ const App = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const visibleHoursCount = isMobile ? 8 : 12;
-  const roomColWidth = isMobile ? ROOM_COL_MOBILE : ROOM_COL_DESKTOP;
+  const roomColWidth = isKiosk ? 268 : (isMobile ? ROOM_COL_MOBILE : ROOM_COL_DESKTOP);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
