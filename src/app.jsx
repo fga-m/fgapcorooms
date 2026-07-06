@@ -726,7 +726,7 @@ const App = () => {
 
         {effectiveView === 'grid' && (
           <div className="flex flex-1 overflow-hidden bg-slate-100/50 p-2 md:p-6 pb-16 md:pb-6">
-            <div ref={gridRef} className={`bg-white rounded-2xl md:rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col transition-opacity duration-300 ${isLoading ? 'opacity-50' : ''}`}>
+            <div ref={gridRef} className={`bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col transition-opacity duration-300 ${isLoading ? 'opacity-50' : ''}`}>
 
               {/* Fixed header */}
               <div className="flex shrink-0 border-b border-slate-200">
