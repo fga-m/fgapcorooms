@@ -55,6 +55,46 @@ export default async function handler(req, res) {
       'User-Agent': 'FGAM-Resource-Planner-v1'
     };
 
+    // Lightweight summary mode: which rooms are booked on each of the next N days.
+    // Used for the date-strip dots. ?summary=14&date=<start>
+    if (req.query.summary) {
+      const days = Math.min(31, Math.max(1, parseInt(req.query.summary, 10) || 14));
+      const sStart = new Date(date + 'T00:00:00Z');
+      sStart.setUTCDate(sStart.getUTCDate() - 1);
+      const sEnd = new Date(date + 'T00:00:00Z');
+      sEnd.setUTCDate(sEnd.getUTCDate() + days);
+      const sUrl = `${PCO_BASE}/event_instances?include=resource_bookings` +
+        `&where[starts_at][gte]=${sStart.toISOString().split('T')[0]}T13:00:00Z` +
+        `&where[starts_at][lte]=${sEnd.toISOString().split('T')[0]}T13:59:59Z` +
+        `&order=starts_at&per_page=100`;
+      const result = await fetchAllPages(sUrl, headers, 15);
+      if (!result.ok) {
+        return res.status(result.status).json({ error: `PCO Summary Error (${result.status})`, details: result.errorText });
+      }
+      const byDay = {};
+      for (const instance of result.data) {
+        const startsAt = instance.attributes?.starts_at;
+        if (!startsAt) continue;
+        const melbDay = new Date(startsAt).toLocaleDateString('en-CA', { timeZone: 'Australia/Melbourne' });
+        const bookingRefs = instance.relationships?.resource_bookings?.data || [];
+        const roomIds = bookingRefs
+          .map(ref => {
+            const booking = (result.included || []).find(inc => inc.type === 'ResourceBooking' && inc.id === ref.id);
+            return booking?.relationships?.resource?.data?.id || null;
+          })
+          .filter(Boolean);
+        if (roomIds.length === 0) continue;
+        if (!byDay[melbDay]) byDay[melbDay] = new Set();
+        roomIds.forEach(id => byDay[melbDay].add(id));
+      }
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+      return res.status(200).json({
+        days: Object.entries(byDay).map(([d, ids]) => ({ date: d, roomIds: [...ids] }))
+      });
+    }
+
     // Fetch a window that covers the full Melbourne day regardless of DST
     const nextDay = new Date(date + 'T00:00:00Z');
     nextDay.setUTCDate(nextDay.getUTCDate() + 1);

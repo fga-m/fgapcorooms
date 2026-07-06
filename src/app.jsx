@@ -85,6 +85,16 @@ const GROUP_COLORS = {
 
 const TZ = 'Australia/Melbourne';
 
+// Rooms that require the Kitchen/Sanctuary booking form
+const KITCHEN_SANCTUARY_IDS = new Set(['725944', '746769']); // Sanctuary, Commercial Kitchen
+
+const TIME_OPTIONS = Array.from({ length: 35 }, (_, i) => 6 + i * 0.5); // 6:00am – 11:00pm
+const fmtHourLabel = (h) => {
+  const hh = Math.floor(h);
+  const mm = h % 1 ? '30' : '00';
+  return `${hh % 12 || 12}:${mm} ${hh >= 12 ? 'pm' : 'am'}`;
+};
+
 // PCO room name (trimmed) -> friendly display name, and resource ID lookups.
 // Matching is by PCO resource ID (rename-proof); names are a fallback.
 const PCO_NAME_TO_DISPLAY = {};
@@ -187,10 +197,15 @@ const ROOM_COL_DESKTOP = 192;
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
 const App = () => {
-  // Kiosk mode (?kiosk=1): chrome hidden, grid only, auto-refresh keeps it live
-  const isKiosk = new URLSearchParams(window.location.search).get('kiosk') === '1';
+  // Kiosk mode (/kiosk or ?kiosk=1): lobby TV display — chrome hidden, grid only,
+  // larger type, auto-refresh + auto-follow keep it live with zero interaction
+  const isKiosk = window.location.pathname.replace(/\/$/, '') === '/kiosk'
+    || new URLSearchParams(window.location.search).get('kiosk') === '1';
 
-  const [currentDate, setCurrentDate] = useState(todayMelbString());
+  const [currentDate, setCurrentDate] = useState(() => {
+    const p = new URLSearchParams(window.location.search).get('date');
+    return /^\d{4}-\d{2}-\d{2}$/.test(p || '') ? p : todayMelbString();
+  });
   const [viewStartHour, setViewStartHour] = useState(8);
   const [activeView, setActiveView] = useState(() => window.location.hash === '#book' ? 'booking' : 'grid');
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -209,6 +224,9 @@ const App = () => {
   const [hideEmptyRooms, setHideEmptyRooms] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [daySummary, setDaySummary] = useState({});
+  const [findFrom, setFindFrom] = useState(18);
+  const [findTo, setFindTo] = useState(21);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const visibleHoursCount = isMobile ? 8 : 12;
@@ -289,6 +307,36 @@ const App = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Shareable day links: keep ?date= in the URL as the user browses
+  useEffect(() => {
+    if (isKiosk) return;
+    const url = new URL(window.location.href);
+    if (currentDate === todayMelbString()) url.searchParams.delete('date');
+    else url.searchParams.set('date', currentDate);
+    window.history.replaceState({}, '', url);
+  }, [currentDate, isKiosk]);
+
+  // Strip dots: which of the next 14 days have tracked-room bookings
+  const fetchSummary = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/calendar?date=${todayMelbString()}&summary=14`);
+      if (!r.ok) return;
+      const json = await r.json();
+      const map = {};
+      for (const day of (json.days || [])) {
+        const tracked = (day.roomIds || []).filter(id => KNOWN_ROOM_IDS.has(id));
+        if (tracked.length > 0) map[day.date] = tracked.length;
+      }
+      setDaySummary(map);
+    } catch (e) { /* dots are decorative — fail silently */ }
+  }, []);
+  useEffect(() => {
+    if (isKiosk) return;
+    fetchSummary();
+    const id = setInterval(fetchSummary, 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [fetchSummary, isKiosk]);
+
   // Auto-refresh: poll while visible, refetch on wake (kiosk & mobile)
   useEffect(() => {
     const id = setInterval(() => {
@@ -301,6 +349,19 @@ const App = () => {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [fetchData]);
+
+  // Kiosk: keep the visible window following the current time (now-line stays ~2h in)
+  useEffect(() => {
+    if (!isKiosk) return;
+    const follow = () => {
+      if (currentDate === todayMelbString()) {
+        setViewStartHour(Math.max(0, Math.min(24 - visibleHoursCount, Math.floor(getMelbHour(new Date())) - 2)));
+      }
+    };
+    follow();
+    const id = setInterval(follow, 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [isKiosk, visibleHoursCount, currentDate]);
 
   // Roll over to the new day at midnight when viewing "today"
   const viewingTodayRef = useRef(true);
@@ -427,8 +488,9 @@ const App = () => {
   const deptTags = useMemo(() => allTags.filter(t => t.groupName === 'Department/Ministries'), [allTags]);
   const eventTypeTags = useMemo(() => allTags.filter(t => t.groupName === 'Event Type'), [allTags]);
 
-  const rowHeight = 64;
-  const groupHeaderHeight = 36;
+  // Kiosk (lobby TV) gets taller rows and larger type for distance viewing
+  const rowHeight = isKiosk ? 88 : 64;
+  const groupHeaderHeight = isKiosk ? 44 : 36;
   const totalHeight = ROOM_GROUPS.reduce((acc, group) => {
     acc += groupHeaderHeight;
     if (!collapsedGroups[group.id]) acc += visibleRooms(group).length * rowHeight;
@@ -497,6 +559,16 @@ const App = () => {
 
   const totalActiveFilters = activeDeptFilters.length + activeTypeFilters.length;
   const nowMs = Date.now();
+
+  // Free-room finder: is this room booked during the chosen window on currentDate?
+  // Uses unfiltered bookings so dept/type filters don't hide conflicts.
+  const isRoomBusy = (room) => bookings.some(b =>
+    bookingMatchesRoom(b, room) &&
+    getHourForDay(b.start, currentDate) < findTo &&
+    getHourForDay(b.end, currentDate) > findFrom
+  );
+  const formUrlForRoom = (room) =>
+    KITCHEN_SANCTUARY_IDS.has(room.resourceId) ? BOOKING_FORMS[1].url : BOOKING_FORMS[0].url;
   const effectiveView = isKiosk ? 'grid' : activeView;
 
   // Next 14 days for the quick-browse strip
@@ -552,7 +624,7 @@ const App = () => {
         </div>
 
         {isKiosk ? (
-          <div className="text-center font-black text-slate-700 uppercase tracking-tight text-lg">{displayDate}</div>
+          <div className="text-center font-black text-slate-700 uppercase tracking-tight text-2xl">{displayDate}</div>
         ) : (
         <>
         <div className="flex items-center justify-between gap-2">
@@ -636,6 +708,7 @@ const App = () => {
               >
                 <span className="text-[9px] font-black uppercase tracking-widest leading-none">{weekday}</span>
                 <span className="text-sm font-black leading-tight mt-0.5">{day}</span>
+                <span className={`w-1 h-1 rounded-full mt-0.5 ${daySummary[ds] ? (isSelected ? 'bg-white' : 'bg-indigo-500') : 'bg-transparent'}`} />
               </button>
             );
           })}
@@ -746,7 +819,7 @@ const App = () => {
                   onTouchStart={handleTimeHeaderDrag}
                 >
                   {Array.from({ length: visibleHoursCount }, (_, i) => viewStartHour + i).map(hour => (
-                    <div key={hour} className="flex-1 border-r border-slate-100 h-12 flex items-center justify-center text-[10px] md:text-[11px] font-black text-slate-500 uppercase italic pointer-events-none">
+                    <div key={hour} className={`flex-1 border-r border-slate-100 h-12 flex items-center justify-center font-black text-slate-500 uppercase italic pointer-events-none ${isKiosk ? 'text-[15px]' : 'text-[10px] md:text-[11px]'}`}>
                       {hour % 12 || 12}{hour >= 12 ? 'PM' : 'AM'}
                     </div>
                   ))}
@@ -767,7 +840,7 @@ const App = () => {
                         onClick={() => toggleGroup(group.id)}
                         aria-label={`Toggle ${group.label}`}
                         className="w-full flex items-center justify-between px-1 md:px-3 text-white font-black uppercase"
-                        style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id], fontSize: isMobile ? '9px' : '10px' }}
+                        style={{ height: `${groupHeaderHeight}px`, backgroundColor: GROUP_COLORS[group.id], fontSize: isKiosk ? '13px' : (isMobile ? '9px' : '10px') }}
                       >
                         <span className="truncate">{isMobile ? group.label.split(' ')[1] || group.label : group.label}</span>
                         {collapsedGroups[group.id] ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
@@ -778,7 +851,7 @@ const App = () => {
                           className="border-b border-slate-100 px-1 md:px-3 flex items-center hover:bg-slate-100/50 transition-colors bg-white"
                           style={{ height: `${rowHeight}px` }}
                         >
-                          <span className="font-black text-slate-800 uppercase tracking-tight truncate leading-tight hidden md:block text-[13px]">{room.displayName}</span>
+                          <span className={`font-black text-slate-800 uppercase tracking-tight truncate leading-tight hidden md:block ${isKiosk ? 'text-[17px]' : 'text-[13px]'}`}>{room.displayName}</span>
                           <span className="font-black text-slate-800 uppercase tracking-tight truncate leading-tight md:hidden text-[10px]">{room.shortName}</span>
                         </div>
                       ))}
@@ -829,10 +902,10 @@ const App = () => {
                                 }}
                                 className="absolute rounded-lg md:rounded-xl px-1.5 md:px-2 py-0.5 shadow-lg border-l-4 text-white z-10 transition-transform hover:scale-[1.01] hover:z-20 flex flex-col justify-center overflow-hidden text-left cursor-pointer"
                               >
-                                <p className="text-[10px] md:text-[11px] font-black truncate uppercase leading-tight drop-shadow-sm">{b.title}</p>
+                                <p className={`font-black truncate uppercase leading-tight drop-shadow-sm ${isKiosk ? 'text-[15px]' : 'text-[10px] md:text-[11px]'}`}>{b.title}</p>
                                 {laneH >= 40 && (
-                                  <p className="text-[9px] font-bold opacity-90 uppercase mt-0.5 flex items-center gap-1">
-                                    <Clock size={9} className="shrink-0" />
+                                  <p className={`font-bold opacity-90 uppercase mt-0.5 flex items-center gap-1 ${isKiosk ? 'text-[13px]' : 'text-[9px]'}`}>
+                                    <Clock size={isKiosk ? 13 : 9} className="shrink-0" />
                                     {fmtTime(b.start)}
                                   </p>
                                 )}
@@ -941,6 +1014,74 @@ const App = () => {
               <div className="text-center mb-2">
                 <h2 className="text-lg md:text-xl font-black uppercase tracking-tight italic text-slate-800">FGAM Booking Forms</h2>
                 <p className="text-[11px] font-bold text-slate-500 mt-1">Choose the form that matches your event.</p>
+              </div>
+
+              {/* Free-room finder */}
+              <div className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm px-5 py-5">
+                <h3 className="font-black text-slate-800 text-[15px] uppercase tracking-tight leading-tight">Check Room Availability</h3>
+                <p className="text-[11px] font-bold text-slate-500 mt-1">Pick a date and time — free rooms link straight to the right form.</p>
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  <input
+                    type="date"
+                    value={currentDate}
+                    onChange={(e) => { if (e.target.value) setCurrentDate(e.target.value); }}
+                    className="text-xs font-bold text-slate-700 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                  <select
+                    value={findFrom}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setFindFrom(v);
+                      if (v >= findTo) setFindTo(Math.min(23, v + 1));
+                    }}
+                    className="text-xs font-bold text-slate-700 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  >
+                    {TIME_OPTIONS.map(h => <option key={h} value={h}>{fmtHourLabel(h)}</option>)}
+                  </select>
+                  <span className="text-[11px] font-black uppercase text-slate-400">to</span>
+                  <select
+                    value={findTo}
+                    onChange={(e) => setFindTo(Number(e.target.value))}
+                    className="text-xs font-bold text-slate-700 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  >
+                    {TIME_OPTIONS.filter(h => h > findFrom).map(h => <option key={h} value={h}>{fmtHourLabel(h)}</option>)}
+                  </select>
+                  {isLoading && <RefreshCw size={14} className="animate-spin text-indigo-400" />}
+                </div>
+                <div className="mt-4 space-y-3">
+                  {ROOM_GROUPS.map(group => (
+                    <div key={group.id}>
+                      <p className="text-[10px] font-black uppercase tracking-widest mb-1.5" style={{ color: GROUP_COLORS[group.id] }}>{group.label}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {group.rooms.map(room => {
+                          const busy = isRoomBusy(room);
+                          return busy ? (
+                            <span
+                              key={room.id}
+                              className="px-2.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight bg-slate-100 text-slate-400 line-through"
+                            >
+                              {room.displayName}
+                            </span>
+                          ) : (
+                            <a
+                              key={room.id}
+                              href={formUrlForRoom(room)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`Book ${room.displayName}`}
+                              className="px-2.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors inline-flex items-center gap-1"
+                            >
+                              {room.displayName} <ExternalLink size={9} />
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 mt-3">
+                  Struck-through rooms are booked between {fmtHourLabel(findFrom)} and {fmtHourLabel(findTo)} on {displayDate}. Green rooms are free — tap to book.
+                </p>
               </div>
 
               {BOOKING_FORMS.map(form => (
