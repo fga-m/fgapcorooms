@@ -135,6 +135,9 @@ const ROOM_COL_DESKTOP = 192;
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
 const App = () => {
+  // Kiosk mode (?kiosk=1): chrome hidden, grid only, auto-refresh keeps it live
+  const isKiosk = new URLSearchParams(window.location.search).get('kiosk') === '1';
+
   const [currentDate, setCurrentDate] = useState(todayMelbString());
   const [viewStartHour, setViewStartHour] = useState(8);
   const [activeView, setActiveView] = useState('grid');
@@ -421,6 +424,18 @@ const App = () => {
 
   const totalActiveFilters = activeDeptFilters.length + activeTypeFilters.length;
   const nowMs = Date.now();
+  const effectiveView = isKiosk ? 'grid' : activeView;
+
+  // Next 14 days for the quick-browse strip
+  const today = todayMelbString();
+  const stripDays = Array.from({ length: 14 }, (_, i) => shiftDateString(today, i));
+  const stripLabel = (ds) => {
+    const d = new Date(ds + 'T12:00:00Z');
+    return {
+      weekday: d.toLocaleDateString('en-AU', { weekday: 'short' }),
+      day: d.getUTCDate()
+    };
+  };
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -438,7 +453,7 @@ const App = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          {!isKiosk && <div className="flex items-center gap-2">
             <div className="hidden md:flex bg-slate-100 p-1 rounded-xl border border-slate-200">
               <button onClick={() => setActiveView('grid')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeView === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
                 <LayoutGrid size={14} /> Grid
@@ -461,9 +476,13 @@ const App = () => {
             <button onClick={fetchData} aria-label="Refresh" className="p-2 bg-white rounded-xl border border-slate-200 shadow-sm text-slate-500 hover:text-indigo-600">
               <RefreshCw size={18} className={isLoading ? 'animate-spin text-indigo-500' : ''} />
             </button>
-          </div>
+          </div>}
         </div>
 
+        {isKiosk ? (
+          <div className="text-center font-black text-slate-700 uppercase tracking-tight text-lg">{displayDate}</div>
+        ) : (
+        <>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200 flex-1 max-w-xs mx-auto md:mx-0">
             <button onClick={() => setCurrentDate(shiftDateString(currentDate, -1))} aria-label="Previous day"
@@ -504,6 +523,34 @@ const App = () => {
             <RotateCcw size={12} /> Today
           </button>
         </div>
+
+        {/* 14-day quick-browse strip */}
+        <div className="flex gap-1.5 mt-3 overflow-x-auto scrollbar-hide pb-0.5">
+          {stripDays.map(ds => {
+            const { weekday, day } = stripLabel(ds);
+            const isSelected = ds === currentDate;
+            const isToday = ds === today;
+            return (
+              <button
+                key={ds}
+                onClick={() => setCurrentDate(ds)}
+                aria-label={`Go to ${ds}`}
+                className={`flex flex-col items-center min-w-[48px] px-2 py-1.5 rounded-xl border transition-all shrink-0 ${
+                  isSelected
+                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-md'
+                    : isToday
+                      ? 'bg-white border-indigo-300 text-indigo-600'
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                }`}
+              >
+                <span className="text-[9px] font-black uppercase tracking-widest leading-none">{weekday}</span>
+                <span className="text-sm font-black leading-tight mt-0.5">{day}</span>
+              </button>
+            );
+          })}
+        </div>
+        </>
+        )}
       </header>
 
       {/* Filter panel */}
@@ -586,7 +633,7 @@ const App = () => {
           </div>
         )}
 
-        {activeView === 'grid' && (
+        {effectiveView === 'grid' && (
           <div className="flex flex-1 overflow-hidden bg-slate-100/50 p-2 md:p-6 pb-16 md:pb-6">
             <div ref={gridRef} className={`bg-white rounded-2xl md:rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-1 flex-col transition-opacity duration-300 ${isLoading ? 'opacity-50' : ''}`}>
 
@@ -714,7 +761,7 @@ const App = () => {
           </div>
         )}
 
-        {activeView === 'feed' && (
+        {effectiveView === 'feed' && (
           <div className={`flex-1 overflow-auto bg-slate-100/50 transition-opacity duration-300 ${isLoading ? 'opacity-50' : ''}`}>
             <div className="max-w-2xl mx-auto px-3 md:px-6 py-4 space-y-3 pb-24">
               {feedBookings.length > 0 ? feedBookings.map(b => {
@@ -849,7 +896,7 @@ const App = () => {
       )}
 
       {/* Mobile bottom nav */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 flex items-center justify-around z-40 shadow-lg">
+      {!isKiosk && <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 flex items-center justify-around z-40 shadow-lg">
         <button
           onClick={() => setActiveView('feed')}
           className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${activeView === 'feed' ? 'text-indigo-600' : 'text-slate-500'}`}
@@ -881,7 +928,7 @@ const App = () => {
           <RefreshCw size={20} className={isLoading ? 'animate-spin text-indigo-500' : ''} />
           <span className="text-[9px] font-black uppercase tracking-widest">Refresh</span>
         </button>
-      </div>
+      </div>}
 
       {showDebug && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-amber-400 z-[100] h-96 overflow-hidden shadow-2xl flex flex-col p-6 md:p-8">
