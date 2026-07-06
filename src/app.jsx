@@ -199,7 +199,8 @@ const App = () => {
   const [allTags, setAllTags] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showDebug, setShowDebug] = useState(false);
+  // Room-discovery panel now lives behind ?debug=1 (no header button)
+  const [showDebug, setShowDebug] = useState(() => new URLSearchParams(window.location.search).get('debug') === '1');
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [activeDeptFilters, setActiveDeptFilters] = useState([]);
@@ -247,8 +248,11 @@ const App = () => {
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
+    const started = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(`/api/calendar?date=${currentDate}`);
+      const response = await fetch(`/api/calendar?date=${currentDate}`, { signal: controller.signal });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `Server Error ${response.status}`);
       setApiRooms(result.rooms || []);
@@ -274,9 +278,12 @@ const App = () => {
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      setError(err.message);
+      setError(err.name === 'AbortError' ? 'Request timed out — please try again.' : err.message);
     } finally {
-      setIsLoading(false);
+      clearTimeout(timeout);
+      // Let the spinner complete at least half a turn so the refresh reads as "done"
+      const remaining = Math.max(0, 500 - (Date.now() - started));
+      setTimeout(() => setIsLoading(false), remaining);
     }
   }, [currentDate]);
 
@@ -524,7 +531,6 @@ const App = () => {
                 <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">{totalActiveFilters}</span>
               )}
             </button>
-            <button onClick={() => setShowDebug(!showDebug)} aria-label="Toggle room discovery panel" className={`hidden md:flex p-2 rounded-xl border transition-all ${showDebug ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-slate-200 text-slate-500 shadow-sm'}`}><Bug size={18} /></button>
             <button onClick={fetchData} aria-label="Refresh" className="p-2 bg-white rounded-xl border border-slate-200 shadow-sm text-slate-500 hover:text-indigo-600">
               <RefreshCw size={18} className={isLoading ? 'animate-spin text-indigo-500' : ''} />
             </button>
