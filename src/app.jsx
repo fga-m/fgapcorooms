@@ -513,9 +513,6 @@ const App = () => {
               <button onClick={() => setActiveView('feed')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeView === 'feed' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
                 <List size={14} /> Feed
               </button>
-              <button onClick={() => setActiveView('booking')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeView === 'booking' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
-                <FileText size={14} /> Book
-              </button>
             </div>
             <button
               onClick={() => setShowFilters(prev => !prev)}
@@ -574,9 +571,19 @@ const App = () => {
             <button onClick={() => setCurrentDate(shiftDateString(currentDate, 1))} aria-label="Next day"
               className="p-2.5 hover:bg-white rounded-xl transition-all shrink-0"><ChevronRight size={18} /></button>
           </div>
-          <button onClick={resetToToday} className="px-3 py-2.5 bg-white hover:bg-slate-50 text-indigo-600 rounded-2xl text-xs font-black uppercase border border-indigo-100 shadow-sm transition-all flex items-center gap-1.5 shrink-0">
-            <RotateCcw size={12} /> Today
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={resetToToday} className="px-3 py-2.5 bg-white hover:bg-slate-50 text-indigo-600 rounded-2xl text-xs font-black uppercase border border-indigo-100 shadow-sm transition-all flex items-center gap-1.5 shrink-0">
+              <RotateCcw size={12} /> Today
+            </button>
+            <button
+              onClick={() => setActiveView('booking')}
+              className={`px-4 md:px-5 py-2.5 md:py-3 rounded-2xl text-xs md:text-sm font-black uppercase tracking-wide transition-all flex items-center gap-2 shrink-0 shadow-md hover:shadow-lg hover:scale-[1.02] ${activeView === 'booking' ? 'bg-indigo-800 text-white ring-2 ring-indigo-300' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}
+            >
+              <FileText size={16} />
+              <span className="hidden md:inline">Book a Room</span>
+              <span className="md:hidden">Book</span>
+            </button>
+          </div>
         </div>
 
         {/* 14-day quick-browse strip */}
