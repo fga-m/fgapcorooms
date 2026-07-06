@@ -471,6 +471,20 @@ const App = () => {
     }
   };
 
+  // Open the browser's native calendar immediately on tap;
+  // fall back to the popover where showPicker() isn't supported
+  const dateInputRef = useRef(null);
+  const openDatePicker = () => {
+    const el = dateInputRef.current;
+    if (el && typeof el.showPicker === 'function') {
+      try {
+        el.showPicker();
+        return;
+      } catch (e) { /* fall through to popover */ }
+    }
+    setShowDatePicker(prev => !prev);
+  };
+
   const copyRoomId = (res) => {
     navigator.clipboard.writeText(res.name || res.id);
     setCopiedId(res.id);
@@ -547,12 +561,21 @@ const App = () => {
               className="p-2.5 hover:bg-white rounded-xl transition-all shrink-0"><ChevronLeft size={18} /></button>
             <div className="relative flex-1">
               <button
-                onClick={() => setShowDatePicker(prev => !prev)}
+                onClick={openDatePicker}
                 aria-label="Choose date"
                 className="w-full font-black text-slate-700 text-center text-sm uppercase tracking-tight hover:text-indigo-600 transition-colors py-1.5"
               >
                 {displayDate}
               </button>
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={currentDate}
+                onChange={(e) => { if (e.target.value) setCurrentDate(e.target.value); }}
+                tabIndex={-1}
+                aria-hidden="true"
+                className="absolute left-1/2 top-full w-px h-px opacity-0 pointer-events-none"
+              />
               {showDatePicker && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowDatePicker(false)} />
