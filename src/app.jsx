@@ -3,8 +3,38 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   ChevronLeft, ChevronRight, Clock, Users, AlertCircle, Bug, RefreshCw,
   Zap, RotateCcw, CheckCircle2, ArrowLeft, ArrowRight, ShieldAlert,
-  ListFilter, LayoutGrid, ChevronDown, ChevronUp, X, List, CalendarDays, Copy, User
+  ListFilter, LayoutGrid, ChevronDown, ChevronUp, X, List, CalendarDays, Copy, User,
+  FileText, ExternalLink, Mail
 } from 'lucide-react';
+
+const BOOKING_FORMS = [
+  {
+    id: 'general',
+    title: 'General Booking Form',
+    color: '#2563eb',
+    description: (
+      <>
+        For booking events at FGAM that <strong>do not require</strong> use of the Sanctuary or the Commercial Kitchen.
+        This form covers general-purpose bookings for rooms or resources, and online or hybrid meetings that may
+        require access to media equipment or the FGAM Zoom accounts.
+      </>
+    ),
+    buttonLabel: 'Open General Booking Form',
+    url: 'https://fgamelbourne.churchcenter.com/calendar/forms/17124'
+  },
+  {
+    id: 'kitchen-sanctuary',
+    title: 'Booking Form (incl. Kitchen / Sanctuary)',
+    color: '#059669',
+    description: (
+      <>
+        For events at FGAM that <strong>do require</strong> use of the Sanctuary and/or the Commercial Kitchen.
+      </>
+    ),
+    buttonLabel: 'Open Kitchen / Sanctuary Form',
+    url: 'https://fgamelbourne.churchcenter.com/calendar/forms/17859'
+  }
+];
 
 const ROOM_GROUPS = [
   {
@@ -162,7 +192,7 @@ const App = () => {
 
   const [currentDate, setCurrentDate] = useState(todayMelbString());
   const [viewStartHour, setViewStartHour] = useState(8);
-  const [activeView, setActiveView] = useState('grid');
+  const [activeView, setActiveView] = useState(() => window.location.hash === '#book' ? 'booking' : 'grid');
   const [lastUpdated, setLastUpdated] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [apiRooms, setApiRooms] = useState([]);
@@ -482,6 +512,9 @@ const App = () => {
               </button>
               <button onClick={() => setActiveView('feed')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeView === 'feed' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
                 <List size={14} /> Feed
+              </button>
+              <button onClick={() => setActiveView('booking')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeView === 'booking' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
+                <FileText size={14} /> Book
               </button>
             </div>
             <button
@@ -865,6 +898,54 @@ const App = () => {
             </div>
           </div>
         )}
+
+        {effectiveView === 'booking' && (
+          <div className="flex-1 overflow-auto bg-slate-100/50">
+            <div className="max-w-2xl mx-auto px-3 md:px-6 py-6 space-y-4 pb-24">
+              <div className="text-center mb-2">
+                <h2 className="text-lg md:text-xl font-black uppercase tracking-tight italic text-slate-800">FGAM Booking Forms</h2>
+                <p className="text-[11px] font-bold text-slate-500 mt-1">Choose the form that matches your event.</p>
+              </div>
+
+              {BOOKING_FORMS.map(form => (
+                <div key={form.id} className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm overflow-hidden relative">
+                  <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ backgroundColor: form.color }} />
+                  <div className="pl-6 pr-5 py-5">
+                    <h3 className="font-black text-slate-800 text-[15px] uppercase tracking-tight leading-tight">{form.title}</h3>
+                    <p className="text-[13px] font-medium text-slate-600 mt-2 leading-relaxed">{form.description}</p>
+                    <a
+                      href={form.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[11px] font-black uppercase tracking-widest shadow-md transition-transform hover:scale-[1.02]"
+                      style={{ backgroundColor: form.color }}
+                    >
+                      <ExternalLink size={13} /> {form.buttonLabel}
+                    </a>
+                  </div>
+                </div>
+              ))}
+
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
+                <p className="text-[12px] font-bold text-amber-900">
+                  📌 Please submit only <strong>one</strong> booking form per event to avoid duplication.
+                </p>
+              </div>
+
+              <div className="text-center pt-2">
+                <p className="text-[12px] font-bold text-slate-500">
+                  Questions or inquiries? Contact Ruth:
+                </p>
+                <a
+                  href="mailto:ruth.lara@fgam.org.au"
+                  className="mt-1 inline-flex items-center gap-1.5 text-[12px] font-black text-indigo-600 hover:text-indigo-800"
+                >
+                  <Mail size={13} /> ruth.lara@fgam.org.au
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Event detail modal */}
@@ -927,21 +1008,28 @@ const App = () => {
       {!isKiosk && <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 flex items-center justify-around z-40 shadow-lg">
         <button
           onClick={() => setActiveView('feed')}
-          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${activeView === 'feed' ? 'text-indigo-600' : 'text-slate-500'}`}
+          className={`flex flex-col items-center gap-1 px-2.5 py-1.5 rounded-xl transition-all ${activeView === 'feed' ? 'text-indigo-600' : 'text-slate-500'}`}
         >
           <List size={20} />
           <span className="text-[9px] font-black uppercase tracking-widest">Feed</span>
         </button>
         <button
           onClick={() => setActiveView('grid')}
-          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${activeView === 'grid' ? 'text-indigo-600' : 'text-slate-500'}`}
+          className={`flex flex-col items-center gap-1 px-2.5 py-1.5 rounded-xl transition-all ${activeView === 'grid' ? 'text-indigo-600' : 'text-slate-500'}`}
         >
           <LayoutGrid size={20} />
           <span className="text-[9px] font-black uppercase tracking-widest">Grid</span>
         </button>
         <button
+          onClick={() => setActiveView('booking')}
+          className={`flex flex-col items-center gap-1 px-2.5 py-1.5 rounded-xl transition-all ${activeView === 'booking' ? 'text-indigo-600' : 'text-slate-500'}`}
+        >
+          <FileText size={20} />
+          <span className="text-[9px] font-black uppercase tracking-widest">Book</span>
+        </button>
+        <button
           onClick={() => setShowFilters(prev => !prev)}
-          className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all relative ${showFilters || totalActiveFilters > 0 ? 'text-indigo-600' : 'text-slate-500'}`}
+          className={`flex flex-col items-center gap-1 px-2.5 py-1.5 rounded-xl transition-all relative ${showFilters || totalActiveFilters > 0 ? 'text-indigo-600' : 'text-slate-500'}`}
         >
           <ListFilter size={20} />
           {totalActiveFilters > 0 && (
@@ -951,7 +1039,7 @@ const App = () => {
         </button>
         <button
           onClick={fetchData}
-          className="flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all text-slate-500"
+          className="flex flex-col items-center gap-1 px-2.5 py-1.5 rounded-xl transition-all text-slate-500"
         >
           <RefreshCw size={20} className={isLoading ? 'animate-spin text-indigo-500' : ''} />
           <span className="text-[9px] font-black uppercase tracking-widest">Refresh</span>
