@@ -89,8 +89,8 @@ async function buildDigest(headers) {
 
   const include = 'include=event,event.owner,resource_bookings';
   const urls = [
-    `${PCO_BASE}/event_instances?${include}&where[starts_at][lte]=${endWide}&where[ends_at][gte]=${startWide}&order=starts_at&per_page=100`,
-    `${PCO_BASE}/event_instances?${include}&where[starts_at][gte]=${startWide}&where[starts_at][lte]=${endWide}&order=starts_at&per_page=100`
+    `${PCO_BASE}/calendar/v2/event_instances?${include}&where[starts_at][lte]=${endWide}&where[ends_at][gte]=${startWide}&order=starts_at&per_page=100`,
+    `${PCO_BASE}/calendar/v2/event_instances?${include}&where[starts_at][gte]=${startWide}&where[starts_at][lte]=${endWide}&order=starts_at&per_page=100`
   ];
   let result = await fetchAllPages(urls[0], headers, 15);
   if (!result.ok) result = await fetchAllPages(urls[1], headers, 15);
