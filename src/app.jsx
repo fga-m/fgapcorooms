@@ -266,8 +266,8 @@ const AdminPortal = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-4 shadow-sm">
-        <div className="max-w-2xl mx-auto flex items-center gap-2">
+      <header className="bg-white border-b border-slate-200 px-4 md:px-8 py-4 shadow-sm">
+        <div className="flex items-center gap-2">
           <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg"><Mail size={20} /></div>
           <div>
             <h1 className="text-base md:text-xl font-black uppercase tracking-tight italic text-slate-800 leading-none">Reminder Admin</h1>
@@ -275,7 +275,7 @@ const AdminPortal = () => {
           </div>
         </div>
       </header>
-      <main className="max-w-2xl mx-auto px-3 md:px-6 py-6 space-y-4 pb-16">
+      <main className="w-full px-3 md:px-8 py-6 space-y-4 pb-16">
         {!key ? (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-5 max-w-sm mx-auto">
             <h2 className="font-black text-slate-800 text-[15px] uppercase tracking-tight">Enter passcode</h2>
@@ -358,7 +358,8 @@ const AdminPortal = () => {
                           )}
                         </div>
                       </div>
-                      <table className="mt-3 w-full text-left">
+                      <div className="mt-3 overflow-x-auto">
+                      <table className="w-full text-left min-w-[520px]">
                         <thead>
                           <tr className="text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
                             <th className="py-1 pr-3 font-black">Event</th>
@@ -378,6 +379,7 @@ const AdminPortal = () => {
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     </div>
                   ))}
                   {digest.owners.length === 0 && (
