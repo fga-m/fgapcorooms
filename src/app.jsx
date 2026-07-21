@@ -359,12 +359,12 @@ const AdminPortal = () => {
                         </div>
                       </div>
                       <div className="mt-3 overflow-x-auto">
-                      <table className="w-full text-left min-w-[520px]">
+                      <table className="w-full text-left min-w-[520px] table-fixed">
                         <thead>
                           <tr className="text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
-                            <th className="py-1 pr-3 font-black">Event</th>
-                            <th className="py-1 pr-3 font-black">Date</th>
-                            <th className="py-1 pr-3 font-black">Time</th>
+                            <th className="py-1 pr-3 font-black w-[30%]">Event</th>
+                            <th className="py-1 pr-3 font-black w-[14%]">Date</th>
+                            <th className="py-1 pr-3 font-black w-[21%]">Time</th>
                             <th className="py-1 font-black">Rooms</th>
                           </tr>
                         </thead>
@@ -372,8 +372,8 @@ const AdminPortal = () => {
                           {o.events.map((ev, i) => (
                             <tr key={i} className="border-b border-slate-50 last:border-0 align-top">
                               <td className="py-1.5 pr-3 text-[12px] font-black text-slate-700">{ev.title}</td>
-                              <td className="py-1.5 pr-3 text-[12px] font-bold text-slate-500 whitespace-nowrap">{ev.day}</td>
-                              <td className="py-1.5 pr-3 text-[12px] font-bold text-slate-500 whitespace-nowrap">{ev.time}</td>
+                              <td className="py-1.5 pr-3 text-[12px] font-bold text-slate-500">{ev.day}</td>
+                              <td className="py-1.5 pr-3 text-[12px] font-bold text-slate-500">{ev.time}</td>
                               <td className="py-1.5 text-[12px] font-bold text-slate-500">{ev.rooms.join(', ')}</td>
                             </tr>
                           ))}
