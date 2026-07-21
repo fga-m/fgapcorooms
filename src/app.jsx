@@ -196,7 +196,186 @@ const ROOM_COL_DESKTOP = 192;
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
+// Hidden admin portal (/admin): preview + send the weekly reminder emails.
+// History lives in the Gmail account's Sent folder.
+const AdminPortal = () => {
+  const [key, setKey] = useState(() => sessionStorage.getItem('fgam_admin_key') || '');
+  const [input, setInput] = useState('');
+  const [digest, setDigest] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  const loadPreview = useCallback(async (k) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch('/api/reminders?preview=1', { headers: { 'x-admin-key': k } });
+      if (r.status === 401) {
+        sessionStorage.removeItem('fgam_admin_key');
+        setKey('');
+        setError('Wrong passcode.');
+        return;
+      }
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error || `Error ${r.status}`);
+      setDigest(json);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (key) loadPreview(key); }, [key, loadPreview]);
+
+  const unlock = () => {
+    const k = input.trim();
+    if (!k) return;
+    sessionStorage.setItem('fgam_admin_key', k);
+    setKey(k);
+  };
+
+  const sendNow = async () => {
+    if (!window.confirm('Send reminder emails to everyone listed now?')) return;
+    setSending(true);
+    setSendResult(null);
+    setError(null);
+    try {
+      const r = await fetch('/api/reminders', { method: 'POST', headers: { 'x-admin-key': key } });
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error || `Error ${r.status}`);
+      setSendResult(json);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const emailable = digest ? digest.owners.filter(o => o.email).length : 0;
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+      <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-4 shadow-sm">
+        <div className="max-w-2xl mx-auto flex items-center gap-2">
+          <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg"><Mail size={20} /></div>
+          <div>
+            <h1 className="text-base md:text-xl font-black uppercase tracking-tight italic text-slate-800 leading-none">Reminder Admin</h1>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Weekly booking reminder emails</p>
+          </div>
+        </div>
+      </header>
+      <main className="max-w-2xl mx-auto px-3 md:px-6 py-6 space-y-4 pb-16">
+        {!key ? (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-5 max-w-sm mx-auto">
+            <h2 className="font-black text-slate-800 text-[15px] uppercase tracking-tight">Enter passcode</h2>
+            <input
+              type="password"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') unlock(); }}
+              className="mt-3 block w-full text-sm font-bold border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              placeholder="Admin passcode"
+              autoFocus
+            />
+            <button onClick={unlock} className="mt-3 w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-md">Unlock</button>
+            {error && <p className="mt-3 text-[11px] font-bold text-rose-600">{error}</p>}
+          </div>
+        ) : (
+          <>
+            {error && (
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl px-5 py-4 text-[12px] font-bold text-rose-800">{error}</div>
+            )}
+            {loading && (
+              <div className="flex items-center justify-center gap-2 py-10 text-slate-400">
+                <RefreshCw size={18} className="animate-spin" />
+                <span className="text-[11px] font-black uppercase tracking-widest">Loading this week…</span>
+              </div>
+            )}
+            {digest && !loading && (
+              <>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <h2 className="font-black text-slate-800 text-[15px] uppercase tracking-tight">
+                      Week of {new Date(digest.monday + 'T12:00:00Z').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – {new Date(digest.sunday + 'T12:00:00Z').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                    </h2>
+                    <p className="text-[11px] font-bold text-slate-500 mt-0.5">{digest.owners.length} owner{digest.owners.length !== 1 ? 's' : ''} with bookings · {emailable} with an email address</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => loadPreview(key)} aria-label="Reload preview" className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-sm text-slate-500 hover:text-indigo-600"><RefreshCw size={16} /></button>
+                    <button
+                      onClick={sendNow}
+                      disabled={sending || emailable === 0}
+                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-md flex items-center gap-2"
+                    >
+                      <Mail size={14} /> {sending ? 'Sending…' : `Send ${emailable} email${emailable !== 1 ? 's' : ''} now`}
+                    </button>
+                  </div>
+                </div>
+
+                {sendResult && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-4">
+                    <p className="text-[13px] font-black text-emerald-800">{sendResult.sent} email{sendResult.sent !== 1 ? 's' : ''} sent.</p>
+                    <ul className="mt-2 space-y-1">
+                      {sendResult.results.map((r, i) => (
+                        <li key={i} className="text-[11px] font-bold text-slate-600">
+                          {r.status === 'sent' ? '✅' : '⚠️'} {r.name} {r.email ? `(${r.email})` : ''} — {r.status}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  {digest.owners.map(o => (
+                    <div key={o.ownerId} className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <h3 className="font-black text-slate-800 text-[14px] uppercase tracking-tight">{o.name}</h3>
+                        {o.email
+                          ? <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{o.email}</span>
+                          : <span className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">No email found in PCO</span>}
+                      </div>
+                      <ul className="mt-2 space-y-1">
+                        {o.events.map((ev, i) => (
+                          <li key={i} className="text-[12px] font-bold text-slate-600">{ev.when} — {ev.title} <span className="text-slate-400">({ev.rooms.join(', ')})</span></li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                  {digest.owners.length === 0 && (
+                    <p className="text-center text-[12px] font-bold text-slate-400 py-8">No room bookings this week.</p>
+                  )}
+                </div>
+
+                {digest.unassigned && digest.unassigned.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
+                    <p className="text-[12px] font-black text-amber-900 uppercase tracking-tight">No owner set in PCO ({digest.unassigned.length}) — nobody will be emailed for these:</p>
+                    <ul className="mt-2 space-y-1">
+                      {digest.unassigned.map((ev, i) => (
+                        <li key={i} className="text-[11px] font-bold text-amber-800">{ev.when} — {ev.title} ({ev.rooms.join(', ')})</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <p className="text-center text-[10px] font-bold text-slate-400 pt-2">
+                  Reminders also send automatically every Monday morning. Full send history: the Gmail account's Sent folder.
+                </p>
+              </>
+            )}
+          </>
+        )}
+      </main>
+    </div>
+  );
+};
+
 const App = () => {
+  // Hidden admin portal for weekly reminder emails
+  const isAdmin = window.location.pathname.replace(/\/$/, '') === '/admin';
+
   // Kiosk mode (/kiosk or ?kiosk=1): lobby TV display — chrome hidden, grid only,
   // larger type, auto-refresh + auto-follow keep it live with zero interaction
   const isKiosk = window.location.pathname.replace(/\/$/, '') === '/kiosk'
@@ -581,6 +760,8 @@ const App = () => {
       day: d.getUTCDate()
     };
   };
+
+  if (isAdmin) return <AdminPortal />;
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
