@@ -205,7 +205,7 @@ A friendly reminder of your room booking${owner.events.length > 1 ? 's' : ''} at
 
 ${lines.join('\n')}
 
-If anything has changed or you no longer need a room, please contact Ruth (ruth.lara@fgam.org.au) so it can be freed up for others.
+If anything has changed or you no longer need a room, you can reply to this email or contact Ruth Lara (ruth.lara@fgam.org.au) so it can be freed up for others.
 
 See the live room calendar: https://fgapcorooms.vercel.app
 
@@ -214,7 +214,7 @@ See the live room calendar: https://fgapcorooms.vercel.app
   const html = `<p>Hi ${firstName},</p>
 <p>A friendly reminder of your room booking${owner.events.length > 1 ? 's' : ''} at FGAM this week (<strong>${fmtDateStr(monday)} – ${fmtDateStr(sunday)}</strong>):</p>
 <ul>${owner.events.map(ev => `<li><strong>${ev.when}</strong> — ${ev.title} <em>(${ev.rooms.join(', ')})</em></li>`).join('')}</ul>
-<p>If anything has changed or you no longer need a room, please contact Ruth (<a href="mailto:ruth.lara@fgam.org.au">ruth.lara@fgam.org.au</a>) so it can be freed up for others.</p>
+<p>If anything has changed or you no longer need a room, you can reply to this email or contact Ruth Lara (<a href="mailto:ruth.lara@fgam.org.au">ruth.lara@fgam.org.au</a>) so it can be freed up for others.</p>
 <p><a href="https://fgapcorooms.vercel.app">See the live room calendar</a></p>
 <p style="color:#64748b;font-size:12px">— FGAM Calendar (automated weekly reminder)</p>`;
 
