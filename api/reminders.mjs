@@ -71,15 +71,24 @@ function currentWeek() {
 async function resolveEmail(personId, headers) {
   try {
     const r = await fetch(`${PCO_BASE}/people/v2/people/${personId}?include=emails`, { headers });
-    if (!r.ok) return null;
+    if (!r.ok) return { address: null, reason: 'not found in People' };
     const json = await r.json();
-    const emails = (json.included || []).filter(i => i.type === 'Email' && !i.attributes?.blocked);
-    const primary = emails.find(e => e.attributes?.primary) || emails[0];
-    return primary?.attributes?.address || null;
+    const emails = (json.included || []).filter(i => i.type === 'Email');
+    const usable = emails.filter(e => !e.attributes?.blocked);
+    const primary = usable.find(e => e.attributes?.primary) || usable[0];
+    if (primary) return { address: primary.attributes.address };
+    if (emails.length > 0) return { address: null, reason: 'email blocked in PCO' };
+    return { address: null, reason: 'no email in PCO' };
   } catch (e) {
-    return null;
+    return { address: null, reason: 'lookup failed' };
   }
 }
+
+// Admin/staff accounts that create events on behalf of others — skip their digests.
+// Override with REMINDER_SKIP_OWNERS="Name One,Name Two" in Vercel env.
+const skipOwnerNames = () =>
+  (process.env.REMINDER_SKIP_OWNERS || 'Nick Teh,Megan Griffith,Ruth Lara')
+    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
 // Build this week's digest: bookings in tracked rooms, grouped by event owner
 async function buildDigest(headers) {
@@ -130,6 +139,8 @@ async function buildDigest(headers) {
 
     const event = {
       title,
+      day: fmtDay(startsAt),
+      time: `${fmtTime(startsAt)} – ${fmtTime(endsAt)}`,
       when: `${fmtDay(startsAt)}, ${fmtTime(startsAt)} – ${fmtTime(endsAt)}`,
       startsAt,
       rooms: roomNames
@@ -143,15 +154,30 @@ async function buildDigest(headers) {
     }
   }
 
-  // Resolve email addresses
-  const ownerList = Object.values(owners);
-  for (const o of ownerList) {
+  // Separate admin/staff accounts (event creators, not real owners)
+  const skip = skipOwnerNames();
+  const allOwners = Object.values(owners);
+  const skippedOwners = [];
+  const ownerList = [];
+  for (const o of allOwners) {
     o.events.sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
-    o.email = await resolveEmail(o.ownerId, headers);
+    if (skip.includes(o.name.trim().toLowerCase())) {
+      skippedOwners.push(o);
+    } else {
+      ownerList.push(o);
+    }
+  }
+
+  // Resolve email addresses (only for owners who will actually be emailed)
+  for (const o of ownerList) {
+    const resolved = await resolveEmail(o.ownerId, headers);
+    o.email = resolved.address;
+    o.emailIssue = resolved.address ? null : resolved.reason;
   }
   ownerList.sort((a, b) => a.name.localeCompare(b.name));
+  skippedOwners.sort((a, b) => a.name.localeCompare(b.name));
 
-  return { monday, sunday, owners: ownerList, unassigned };
+  return { monday, sunday, owners: ownerList, skippedOwners, unassigned };
 }
 
 function emailBody(owner, monday, sunday) {

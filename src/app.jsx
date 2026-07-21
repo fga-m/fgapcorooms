@@ -335,19 +335,48 @@ const AdminPortal = () => {
                         <h3 className="font-black text-slate-800 text-[14px] uppercase tracking-tight">{o.name}</h3>
                         {o.email
                           ? <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{o.email}</span>
-                          : <span className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">No email found in PCO</span>}
+                          : o.emailIssue === 'email blocked in PCO'
+                            ? <span className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Email blocked in PCO — unblock it on their profile</span>
+                            : <span className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">{o.emailIssue || 'No email in PCO'}</span>}
                       </div>
-                      <ul className="mt-2 space-y-1">
-                        {o.events.map((ev, i) => (
-                          <li key={i} className="text-[12px] font-bold text-slate-600">{ev.when} — {ev.title} <span className="text-slate-400">({ev.rooms.join(', ')})</span></li>
-                        ))}
-                      </ul>
+                      <table className="mt-3 w-full text-left">
+                        <thead>
+                          <tr className="text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
+                            <th className="py-1 pr-3 font-black">Event</th>
+                            <th className="py-1 pr-3 font-black">Date</th>
+                            <th className="py-1 pr-3 font-black">Time</th>
+                            <th className="py-1 font-black">Rooms</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {o.events.map((ev, i) => (
+                            <tr key={i} className="border-b border-slate-50 last:border-0 align-top">
+                              <td className="py-1.5 pr-3 text-[12px] font-black text-slate-700">{ev.title}</td>
+                              <td className="py-1.5 pr-3 text-[12px] font-bold text-slate-500 whitespace-nowrap">{ev.day}</td>
+                              <td className="py-1.5 pr-3 text-[12px] font-bold text-slate-500 whitespace-nowrap">{ev.time}</td>
+                              <td className="py-1.5 text-[12px] font-bold text-slate-500">{ev.rooms.join(', ')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   ))}
                   {digest.owners.length === 0 && (
                     <p className="text-center text-[12px] font-bold text-slate-400 py-8">No room bookings this week.</p>
                   )}
                 </div>
+
+                {digest.skippedOwners && digest.skippedOwners.length > 0 && (
+                  <div className="bg-slate-100 border border-slate-200 rounded-2xl px-5 py-4">
+                    <p className="text-[12px] font-black text-slate-600 uppercase tracking-tight">Skipped — admins who created events for others</p>
+                    <ul className="mt-2 space-y-1">
+                      {digest.skippedOwners.map(o => (
+                        <li key={o.ownerId} className="text-[11px] font-bold text-slate-500">{o.name} — {o.events.length} event{o.events.length !== 1 ? 's' : ''}</li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-[10px] font-bold text-slate-400">To remind the real person instead, change the event's owner in PCO Calendar. Edit this skip list via the REMINDER_SKIP_OWNERS environment variable in Vercel.</p>
+                  </div>
+                )}
 
                 {digest.unassigned && digest.unassigned.length > 0 && (
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
