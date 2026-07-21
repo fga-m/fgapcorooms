@@ -237,13 +237,20 @@ const AdminPortal = () => {
     setKey(k);
   };
 
-  const sendNow = async () => {
-    if (!window.confirm('Send reminder emails to everyone listed now?')) return;
+  const doSend = async (ownerId = null, name = null) => {
+    const msg = ownerId
+      ? `Send an updated reminder to ${name} only?`
+      : 'Send reminder emails to everyone listed now?';
+    if (!window.confirm(msg)) return;
     setSending(true);
     setSendResult(null);
     setError(null);
     try {
-      const r = await fetch('/api/reminders', { method: 'POST', headers: { 'x-admin-key': key } });
+      const r = await fetch('/api/reminders', {
+        method: 'POST',
+        headers: { 'x-admin-key': key, 'Content-Type': 'application/json' },
+        body: JSON.stringify(ownerId ? { ownerId } : {})
+      });
       const json = await r.json();
       if (!r.ok) throw new Error(json.error || `Error ${r.status}`);
       setSendResult(json);
@@ -253,6 +260,7 @@ const AdminPortal = () => {
       setSending(false);
     }
   };
+  const sendNow = () => doSend();
 
   const emailable = digest ? digest.owners.filter(o => o.email).length : 0;
 
@@ -333,11 +341,22 @@ const AdminPortal = () => {
                     <div key={o.ownerId} className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <h3 className="font-black text-slate-800 text-[14px] uppercase tracking-tight">{o.name}</h3>
-                        {o.email
-                          ? <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{o.email}</span>
-                          : o.emailIssue === 'email blocked in PCO'
-                            ? <span className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Email blocked in PCO — unblock it on their profile</span>
-                            : <span className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">{o.emailIssue || 'No email in PCO'}</span>}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {o.email
+                            ? <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{o.email}</span>
+                            : o.emailIssue === 'email blocked in PCO'
+                              ? <span className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Email blocked in PCO — unblock it on their profile</span>
+                              : <span className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">{o.emailIssue || 'No email in PCO'}</span>}
+                          {o.email && (
+                            <button
+                              onClick={() => doSend(o.ownerId, o.name)}
+                              disabled={sending}
+                              className="text-[10px] font-black uppercase tracking-widest text-indigo-600 border border-indigo-200 hover:bg-indigo-50 disabled:opacity-40 px-2.5 py-1 rounded-full flex items-center gap-1"
+                            >
+                              <Mail size={10} /> Send just to them
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <table className="mt-3 w-full text-left">
                         <thead>

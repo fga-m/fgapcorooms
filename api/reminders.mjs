@@ -266,8 +266,19 @@ export default async function handler(req, res) {
       auth: { user: gmailUser, pass: gmailPass }
     });
 
+    // POST { ownerId } sends to just that person (e.g. an updated reminder
+    // after a booking change); no body sends to everyone.
+    const onlyOwnerId = req.method === 'POST' && req.body && req.body.ownerId
+      ? String(req.body.ownerId) : null;
+    const targets = onlyOwnerId
+      ? digest.owners.filter(o => String(o.ownerId) === onlyOwnerId)
+      : digest.owners;
+    if (onlyOwnerId && targets.length === 0) {
+      return res.status(404).json({ error: "That person has no bookings in this week's digest." });
+    }
+
     const results = [];
-    for (const owner of digest.owners) {
+    for (const owner of targets) {
       if (!owner.email) {
         results.push({ name: owner.name, email: null, events: owner.events.length, status: 'skipped — no email found in PCO' });
         continue;
