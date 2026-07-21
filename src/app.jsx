@@ -395,7 +395,7 @@ const AdminPortal = () => {
                         <li key={i} className="text-[11px] font-bold text-slate-500">{ev.when} — {ev.title}</li>
                       ))}
                     </ul>
-                    <p className="mt-2 text-[10px] font-bold text-slate-400">Edit the exclusion list via the REMINDER_SKIP_EVENTS environment variable in Vercel (comma-separated, matches event names containing the text).</p>
+                    <p className="mt-2 text-[10px] font-bold text-slate-400">Edit via the REMINDER_SKIP_EVENTS environment variable in Vercel — comma-separated, matches event names containing the text. Add @day to only exclude on that weekday, e.g. "Fungus Youth Group@Fri".</p>
                   </div>
                 )}
 

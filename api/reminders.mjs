@@ -91,10 +91,19 @@ const skipOwnerNames = () =>
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
 // Recurring events that don't need reminders (title substring match, case-insensitive).
-// Override with REMINDER_SKIP_EVENTS="Sunday Service,Preservice Prayer".
-const skipEventPatterns = () =>
-  (process.env.REMINDER_SKIP_EVENTS || 'Sunday Service')
-    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+// Add "@day" to only exclude on that weekday: "Fungus Youth Group@Fri" skips Friday
+// occurrences but still reminds for the same event on any other day.
+// Override with REMINDER_SKIP_EVENTS="Sunday Service,Fungus Youth Group@Fri".
+const skipEventRules = () =>
+  (process.env.REMINDER_SKIP_EVENTS || 'Sunday Service,Fungus Youth Group@Fri')
+    .split(',').map(s => s.trim()).filter(Boolean)
+    .map(entry => {
+      const [pattern, day] = entry.split('@').map(x => x.trim());
+      return { pattern: pattern.toLowerCase(), day: day ? day.toLowerCase().slice(0, 3) : null };
+    });
+
+const melbWeekday = (iso) =>
+  new Date(iso).toLocaleDateString('en-AU', { timeZone: TZ, weekday: 'long' }).toLowerCase();
 
 // Build this week's digest: bookings in tracked rooms, grouped by event owner
 async function buildDigest(headers) {
@@ -114,7 +123,7 @@ async function buildDigest(headers) {
   const included = result.included;
   const owners = {}; // ownerId -> { name, events: [] }
   const unassigned = [];
-  const skipEvents = skipEventPatterns();
+  const skipEvents = skipEventRules();
   const skippedEvents = [];
 
   for (const instance of result.data) {
@@ -140,8 +149,12 @@ async function buildDigest(headers) {
     const eventData = eventId ? included.find(inc => inc.type === 'Event' && inc.id === eventId) : null;
     const title = eventData?.attributes?.name || instance.attributes?.name || 'Untitled Event';
 
-    // Recurring events that don't need reminders (e.g. Sunday services)
-    if (skipEvents.some(p => title.toLowerCase().includes(p))) {
+    // Recurring events that don't need reminders (e.g. Sunday services),
+    // optionally only on a specific weekday ("Event Name@Fri")
+    if (skipEvents.some(r =>
+      title.toLowerCase().includes(r.pattern) &&
+      (!r.day || melbWeekday(startsAt).startsWith(r.day))
+    )) {
       skippedEvents.push({ title, when: `${fmtDay(startsAt)}, ${fmtTime(startsAt)}` });
       continue;
     }
@@ -207,7 +220,7 @@ ${lines.join('\n')}
 
 If anything has changed or you no longer need a room, you can reply to this email (booking@fgam.org.au) so it can be freed up for others.
 
-See the live room calendar: https://fgapcorooms.vercel.app
+See the live room calendar: https://kiosk.fgam.org.au
 
 — FGAM Calendar (automated weekly reminder)`;
 
@@ -215,7 +228,7 @@ See the live room calendar: https://fgapcorooms.vercel.app
 <p>A friendly reminder of your room booking${owner.events.length > 1 ? 's' : ''} at FGAM this week (<strong>${fmtDateStr(monday)} – ${fmtDateStr(sunday)}</strong>):</p>
 <ul>${owner.events.map(ev => `<li><strong>${ev.when}</strong> — ${ev.title} <em>(${ev.rooms.join(', ')})</em></li>`).join('')}</ul>
 <p>If anything has changed or you no longer need a room, you can reply to this email (<a href="mailto:booking@fgam.org.au">booking@fgam.org.au</a>) so it can be freed up for others.</p>
-<p><a href="https://fgapcorooms.vercel.app">See the live room calendar</a></p>
+<p><a href="https://kiosk.fgam.org.au">See the live room calendar</a></p>
 <p style="color:#64748b;font-size:12px">— FGAM Calendar (automated weekly reminder)</p>`;
 
   return { text, html };
