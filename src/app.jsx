@@ -366,15 +366,27 @@ const AdminPortal = () => {
                   )}
                 </div>
 
+                {digest.skippedEvents && digest.skippedEvents.length > 0 && (
+                  <div className="bg-slate-100 border border-slate-200 rounded-2xl px-5 py-4">
+                    <p className="text-[12px] font-black text-slate-600 uppercase tracking-tight">Excluded recurring events ({digest.skippedEvents.length})</p>
+                    <ul className="mt-2 space-y-1">
+                      {digest.skippedEvents.map((ev, i) => (
+                        <li key={i} className="text-[11px] font-bold text-slate-500">{ev.when} — {ev.title}</li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-[10px] font-bold text-slate-400">Edit the exclusion list via the REMINDER_SKIP_EVENTS environment variable in Vercel (comma-separated, matches event names containing the text).</p>
+                  </div>
+                )}
+
                 {digest.skippedOwners && digest.skippedOwners.length > 0 && (
                   <div className="bg-slate-100 border border-slate-200 rounded-2xl px-5 py-4">
-                    <p className="text-[12px] font-black text-slate-600 uppercase tracking-tight">Skipped — admins who created events for others</p>
+                    <p className="text-[12px] font-black text-slate-600 uppercase tracking-tight">Skipped owners</p>
                     <ul className="mt-2 space-y-1">
                       {digest.skippedOwners.map(o => (
                         <li key={o.ownerId} className="text-[11px] font-bold text-slate-500">{o.name} — {o.events.length} event{o.events.length !== 1 ? 's' : ''}</li>
                       ))}
                     </ul>
-                    <p className="mt-2 text-[10px] font-bold text-slate-400">To remind the real person instead, change the event's owner in PCO Calendar. Edit this skip list via the REMINDER_SKIP_OWNERS environment variable in Vercel.</p>
+                    <p className="mt-2 text-[10px] font-bold text-slate-400">Controlled by the REMINDER_SKIP_OWNERS environment variable in Vercel.</p>
                   </div>
                 )}
 

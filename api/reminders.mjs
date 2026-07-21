@@ -84,10 +84,16 @@ async function resolveEmail(personId, headers) {
   }
 }
 
-// Admin/staff accounts that create events on behalf of others — skip their digests.
-// Override with REMINDER_SKIP_OWNERS="Name One,Name Two" in Vercel env.
+// Optional: skip specific owners (e.g. staff) via REMINDER_SKIP_OWNERS="Name One,Name Two".
+// Default: nobody skipped.
 const skipOwnerNames = () =>
-  (process.env.REMINDER_SKIP_OWNERS || 'Nick Teh,Megan Griffith,Ruth Lara')
+  (process.env.REMINDER_SKIP_OWNERS || '')
+    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+// Recurring events that don't need reminders (title substring match, case-insensitive).
+// Override with REMINDER_SKIP_EVENTS="Sunday Service,Preservice Prayer".
+const skipEventPatterns = () =>
+  (process.env.REMINDER_SKIP_EVENTS || 'Sunday Service')
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
 // Build this week's digest: bookings in tracked rooms, grouped by event owner
@@ -108,6 +114,8 @@ async function buildDigest(headers) {
   const included = result.included;
   const owners = {}; // ownerId -> { name, events: [] }
   const unassigned = [];
+  const skipEvents = skipEventPatterns();
+  const skippedEvents = [];
 
   for (const instance of result.data) {
     const startsAt = instance.attributes?.starts_at;
@@ -131,6 +139,13 @@ async function buildDigest(headers) {
     const eventId = instance.relationships?.event?.data?.id;
     const eventData = eventId ? included.find(inc => inc.type === 'Event' && inc.id === eventId) : null;
     const title = eventData?.attributes?.name || instance.attributes?.name || 'Untitled Event';
+
+    // Recurring events that don't need reminders (e.g. Sunday services)
+    if (skipEvents.some(p => title.toLowerCase().includes(p))) {
+      skippedEvents.push({ title, when: `${fmtDay(startsAt)}, ${fmtTime(startsAt)}` });
+      continue;
+    }
+
     const ownerId = eventData?.relationships?.owner?.data?.id;
     const owner = ownerId ? included.find(inc => inc.type === 'Person' && inc.id === ownerId) : null;
     const ownerName = owner
@@ -177,7 +192,7 @@ async function buildDigest(headers) {
   ownerList.sort((a, b) => a.name.localeCompare(b.name));
   skippedOwners.sort((a, b) => a.name.localeCompare(b.name));
 
-  return { monday, sunday, owners: ownerList, skippedOwners, unassigned };
+  return { monday, sunday, owners: ownerList, skippedOwners, skippedEvents, unassigned };
 }
 
 function emailBody(owner, monday, sunday) {
